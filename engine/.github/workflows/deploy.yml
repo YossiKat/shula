@@ -1,0 +1,16 @@
+name: Deploy Shulamit OS
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Deploy to Server (Vercel/Docker)
+        run: |
+          echo "מבצע פריסה של המנוע והדשבורד..."
+          # כאן נכנסות פקודות הפריסה לשרת שבחרת
