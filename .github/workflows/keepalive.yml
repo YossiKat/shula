@@ -1,0 +1,16 @@
+name: Keep Shula awake
+
+# Render free tier spins the service down after 15 minutes of inactivity,
+# and waking it takes ~50s — longer than Twilio waits for a webhook reply.
+# A ping every 10 minutes keeps Shula warm, so WhatsApp messages are never lost.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Shula
+        run: curl -fsS --max-time 60 https://shula-x5mr.onrender.com/ || echo "ping failed (service may be waking up)"
