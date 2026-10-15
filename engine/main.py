@@ -17,8 +17,13 @@ app = FastAPI()
 TWILIO_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
-ASYNC_MODE = bool(TWILIO_SID and TWILIO_TOKEN)
+# שליחה יזומה דרך Twilio REST דורשת אישור KYC ב-Trust Hub. עד אז — עונים בתוך חלון ה-webhook.
+ASYNC_MODE = bool(TWILIO_SID and TWILIO_TOKEN and os.environ.get("TWILIO_ASYNC") == "1")
 SYNC_DEADLINE = 12  # שניות — מתחת ל-15 של Twilio
+
+# תשובות שלא הספיקו בזמן — נמסרות בהודעה הבאה של אותו שולח
+_pending: dict[str, asyncio.Future] = {}
+NUDGES = {"המשך", "נו", "?", "??", "...", "ok", "אוקיי", "טוב"}
 
 EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
 
@@ -132,14 +137,42 @@ async def whatsapp_webhook(
         background.add_task(_answer_in_background, From, user_message)
         return PlainTextResponse(content=EMPTY_TWIML, media_type="application/xml")
 
-    # מצב סינכרוני (בלי פרטי Twilio) — דדליין קשיח
+    # יש תשובה שממתינה מההודעה הקודמת? נמסור אותה קודם.
+    pending = _pending.pop(From, None)
+    if pending is not None:
+        text = await _collect(pending, SYNC_DEADLINE)
+        if text is None:  # עדיין לא מוכנה
+            if user_message in NUDGES:
+                _pending[From] = pending
+            else:
+                # הודעה חדשה בזמן המתנה — נשרשר: קודם התשובה הקודמת, אחריה החדשה
+                async def chain(first_fut=pending, msg=user_message):
+                    first = await first_fut
+                    second = await asyncio.to_thread(shula_agent.reply, From, msg)
+                    return f"{first}\n\n{second}"
+                _pending[From] = asyncio.ensure_future(chain())
+            return _twiml("עוד רגע, אני עדיין בודקת… שלח לי 'המשך' בעוד כמה שניות.")
+        if user_message in NUDGES:
+            return _twiml(text)
+        # הודעה חדשה אמיתית — נענה על הקודמת, והחדשה תטופל ברקע
+        _pending[From] = asyncio.ensure_future(asyncio.to_thread(shula_agent.reply, From, user_message))
+        return _twiml(text + "\n\n(על ההודעה החדשה אענה בהודעה הבאה — שלח 'המשך')")
+
+    # הודעה רגילה — מנסים לענות בתוך הדדליין
+    fut = asyncio.ensure_future(asyncio.to_thread(shula_agent.reply, From, user_message))
+    text = await _collect(fut, SYNC_DEADLINE)
+    if text is None:
+        _pending[From] = fut
+        return _twiml("רגע, בודקת… 🔎 שלח לי 'המשך' בעוד כמה שניות ואמסור את התשובה.")
+    return _twiml(text)
+
+
+async def _collect(fut: asyncio.Future, timeout: float):
+    """מחכה לתשובה עד timeout. מחזיר טקסט, או None אם עדיין לא מוכנה."""
     try:
-        text = await asyncio.wait_for(
-            asyncio.to_thread(shula_agent.reply, From, user_message), timeout=SYNC_DEADLINE
-        )
+        return await asyncio.wait_for(asyncio.shield(fut), timeout=timeout)
     except asyncio.TimeoutError:
-        text = "לקח לי יותר מדי זמן לחשוב 😅 שלח שוב בבקשה."
+        return None
     except Exception as e:
         log.exception("Shula failed")
-        text = f"שולה נתקלה בבעיה טכנית: {str(e)[:300]}"
-    return _twiml(text)
+        return f"שולה נתקלה בבעיה טכנית: {str(e)[:300]}"
