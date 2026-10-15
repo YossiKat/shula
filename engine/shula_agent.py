@@ -1,6 +1,8 @@
 """
 המוח של שולה: Gemini + זיכרון שיחה לכל מספר + כלים (יומן, רשתות).
 """
+import functools
+import logging
 import os
 import threading
 from collections import defaultdict
@@ -21,6 +23,23 @@ manager = BotManager(bots_dir=os.path.join(os.path.dirname(__file__), "bots"))
 
 if os.environ.get("GEMINI_API_KEY"):
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
+log = logging.getLogger("shula.agent")
+
+
+def _safe(fn):
+    """כלי שנכשל מחזיר הודעת שגיאה כטקסט — כדי ששולה תסביר ליוסי במקום לקרוס."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            log.exception("tool %s failed", fn.__name__)
+            return f"שגיאה בכלי {fn.__name__}: {str(e)[:300]}"
+    return wrapper
+
+
+TOOLS = [_safe(t) for t in CALENDAR_TOOLS + SOCIAL_TOOLS]
 
 _histories: dict[str, list] = defaultdict(list)
 _locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
@@ -50,7 +69,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
         model = genai.GenerativeModel(
             GEMINI_MODEL,
             system_instruction=_system_prompt(bot_name),
-            tools=CALENDAR_TOOLS + SOCIAL_TOOLS,
+            tools=TOOLS,
             generation_config={"max_output_tokens": 600, "temperature": 0.6},
         )
         chat = model.start_chat(

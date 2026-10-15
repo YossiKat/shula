@@ -61,7 +61,12 @@ def root():
 
 @app.post("/ask")
 async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str = "api"):
-    return {"response": shula_agent.reply(sender, user_input, bot_name), "bot_used": bot_name}
+    try:
+        text = await asyncio.to_thread(shula_agent.reply, sender, user_input, bot_name)
+    except Exception as e:
+        log.exception("Shula failed")
+        text = f"שולה נתקלה בבעיה טכנית: {str(e)[:300]}"
+    return {"response": text, "bot_used": bot_name}
 
 
 @app.post("/whatsapp", response_class=PlainTextResponse)
