@@ -20,7 +20,7 @@ def root():
 @app.post("/ask")
 async def ask_shula(user_input: str, bot_name: str = "core_shula"):
     system_prompt = manager.get_bot_prompt(bot_name)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     response = model.generate_content(f"{system_prompt}\n\nUser: {user_input}")
     return {"response": response.text, "bot_used": bot_name}
 
@@ -35,7 +35,7 @@ async def whatsapp_webhook(
 
     try:
         system_prompt = manager.get_bot_prompt("core_shula")
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(f"{system_prompt}\n\nUser: {user_message}")
         reply = response.text.strip()
     except Exception as e:
