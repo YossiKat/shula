@@ -57,7 +57,7 @@ def _ensure_loaded():
     if not _loaded:
         _loaded = True
         for sender, msgs in memory_store.load().items():
-            _histories[sender] = msgs[-MAX_HISTORY:]
+            _histories[sender] = msgs if sender == "__usage__" else msgs[-MAX_HISTORY:]
         if _histories:
             log.info("memory loaded for %d senders", len(_histories))
 
@@ -110,8 +110,45 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
         response = chat.send_message(user_message, request_options={"timeout": 60})
         _histories[sender] = _from_gemini_history(chat.history)[-MAX_HISTORY:]
         text = (response.text or "").strip()
+        _log_usage(sender, user_message, response)
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
     return text or "לא הצלחתי לנסח תשובה, נסה שוב."
+
+
+# ---------- יומן שימוש (לדוח היומי של יוסי) ----------
+# מחיר משוער ל-gemini flash: $0.30 למיליון טוקני קלט, $2.50 למיליון טוקני פלט
+PRICE_IN, PRICE_OUT = 0.30 / 1_000_000, 2.50 / 1_000_000
+
+
+def _log_usage(sender: str, user_message: str, response) -> None:
+    try:
+        u = getattr(response, "usage_metadata", None)
+        t_in = int(getattr(u, "prompt_token_count", 0) or 0)
+        t_out = int(getattr(u, "candidates_token_count", 0) or 0)
+        _histories.setdefault("__usage__", []).append({
+            "ts": datetime.now(TZ).isoformat(timespec="minutes"),
+            "sender": sender[-4:],
+            "q": user_message[:120],
+            "in": t_in, "out": t_out,
+            "usd": round(t_in * PRICE_IN + t_out * PRICE_OUT, 5),
+        })
+        _histories["__usage__"] = _histories["__usage__"][-500:]
+    except Exception:
+        log.exception("usage log failed")
+
+
+def usage_report(days: int = 1) -> dict:
+    """סיכום שימוש ב-Gemini דרך שולה ב-days הימים האחרונים."""
+    from datetime import timedelta
+    _ensure_loaded()
+    since = (datetime.now(TZ) - timedelta(days=days)).isoformat(timespec="minutes")
+    rows = [r for r in _histories.get("__usage__", []) if r["ts"] >= since]
+    return {
+        "days": days, "queries": len(rows),
+        "tokens_in": sum(r["in"] for r in rows), "tokens_out": sum(r["out"] for r in rows),
+        "usd": round(sum(r["usd"] for r in rows), 4),
+        "items": rows[-100:],
+    }
 
 
 def forget(sender: str) -> None:

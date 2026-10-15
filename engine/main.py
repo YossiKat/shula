@@ -68,6 +68,15 @@ def root():
     }
 
 
+@app.get("/usage")
+def usage(days: int = 1, key: str = ""):
+    """סיכום שימוש ב-Gemini דרך שולה — לדוח היומי. מוגן במפתח REPORT_KEY."""
+    expected = os.environ.get("REPORT_KEY", "")
+    if not expected or key != expected:
+        return PlainTextResponse("forbidden", status_code=403)
+    return shula_agent.usage_report(max(1, min(days, 90)))
+
+
 # ---------- חיבור חד-פעמי לחשבון גוגל של יוסי ----------
 
 def _page(title: str, body: str) -> HTMLResponse:
