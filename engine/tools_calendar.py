@@ -26,15 +26,19 @@ _service = None
 def _svc():
     global _service
     if _service is None:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-        raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        if not raw:
-            raise RuntimeError("היומן עדיין לא מחובר (חסר GOOGLE_SERVICE_ACCOUNT_JSON)")
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(raw), scopes=["https://www.googleapis.com/auth/calendar"]
-        )
-        _service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+        import google_auth
+        if google_auth.is_connected():
+            _service = google_auth.service("calendar", "v3")
+        else:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+            raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+            if not raw:
+                raise RuntimeError("היומן עדיין לא מחובר (חשבון גוגל לא חובר לשולה)")
+            creds = service_account.Credentials.from_service_account_info(
+                json.loads(raw), scopes=["https://www.googleapis.com/auth/calendar"]
+            )
+            _service = build("calendar", "v3", credentials=creds, cache_discovery=False)
     return _service
 
 
