@@ -68,11 +68,17 @@ _agenda_cache = {"ts": 0.0, "text": ""}
 def _agenda() -> str:
     """היומן של היום+מחר (שמור 3 דקות) — כדי ששולה תענה מיד בלי לקרוא לכלי."""
     import time
-    from tools_calendar import get_calendar_events
+    from datetime import timedelta
+    from tools_calendar import get_events_for_date
     if time.time() - _agenda_cache["ts"] > 180:
         try:
-            _agenda_cache["text"] = get_calendar_events(days_ahead=2)
+            today = datetime.now(TZ).date()
+            parts = []
+            for label, d in (("היום", today), ("מחר", today + timedelta(days=1))):
+                parts.append(f"{label} — יום {DAYS_HE[d.weekday()]} {d.strftime('%d/%m')}:\n{get_events_for_date(d.isoformat())}")
+            _agenda_cache["text"] = "\n\n".join(parts)
         except Exception:
+            log.exception("agenda preload failed")
             _agenda_cache["text"] = ""
         _agenda_cache["ts"] = time.time()
     return _agenda_cache["text"]

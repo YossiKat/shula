@@ -68,6 +68,17 @@ def get_calendar_events(days_ahead: int = 1, days_back: int = 0) -> str:
     return "\n".join(_fmt(e) for e in items)
 
 
+def get_events_for_date(date_iso: str) -> str:
+    """מחזיר את כל האירועים ביומן של יוסי בתאריך מסוים. date_iso בפורמט YYYY-MM-DD. זה הכלי הנכון לשאלות כמו 'מה יש לי מחר' או 'מה יש ביום חמישי'."""
+    day = datetime.fromisoformat(date_iso).replace(tzinfo=TZ, hour=0, minute=0, second=0)
+    res = _svc().events().list(
+        calendarId=CALENDAR_ID, timeMin=day.isoformat(), timeMax=(day + timedelta(days=1)).isoformat(),
+        singleEvents=True, orderBy="startTime", maxResults=50,
+    ).execute()
+    items = res.get("items", [])
+    return "\n".join(_fmt(e) for e in items) if items else f"אין אירועים ב-{day.strftime('%d/%m')}."
+
+
 def search_calendar_events(query: str, days_ahead: int = 30) -> str:
     """מחפש אירועים ביומן לפי מילה (למשל 'אופניים', 'זום', שם של אדם) בטווח של days_ahead ימים קדימה."""
     now = datetime.now(TZ)
@@ -122,4 +133,4 @@ def delete_calendar_event(title_query: str, date_iso: str) -> str:
     return f"נמחק: {_fmt(items[0])}"
 
 
-CALENDAR_TOOLS = [get_calendar_events, search_calendar_events, create_calendar_event, delete_calendar_event]
+CALENDAR_TOOLS = [get_events_for_date, get_calendar_events, search_calendar_events, create_calendar_event, delete_calendar_event]
