@@ -93,6 +93,18 @@ def _from_gemini_history(history) -> list:
     return out
 
 
+def _safe_text(response) -> str:
+    """מוציא טקסט מהתשובה בלי לקרוס כשאין בה טקסט (למשל כשנקטעה)."""
+    try:
+        return (response.text or "").strip()
+    except Exception:
+        parts = []
+        for cand in getattr(response, "candidates", []) or []:
+            for p in getattr(getattr(cand, "content", None), "parts", []) or []:
+                parts.append(getattr(p, "text", "") or "")
+        return "".join(parts).strip()
+
+
 def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
     """מייצר תשובה עם זיכרון שיחה וכלים. sender = מזהה (מספר הוואטסאפ)."""
     _ensure_loaded()
@@ -101,7 +113,8 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
             GEMINI_MODEL,
             system_instruction=_system_prompt(bot_name),
             tools=TOOLS,
-            generation_config={"max_output_tokens": 800, "temperature": 0.6},
+            # מספיק מקום גם ל"חשיבה" של המודל וגם לתשובה — 800 היה קטן מדי ונקטע (finish_reason 2)
+            generation_config={"max_output_tokens": 4096, "temperature": 0.6},
         )
         chat = model.start_chat(
             history=_to_gemini_history(_histories[sender]),
@@ -109,7 +122,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
         )
         response = chat.send_message(user_message, request_options={"timeout": 60})
         _histories[sender] = _from_gemini_history(chat.history)[-MAX_HISTORY:]
-        text = (response.text or "").strip()
+        text = _safe_text(response)
         _log_usage(sender, user_message, response)
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
     return text or "לא הצלחתי לנסח תשובה, נסה שוב."
