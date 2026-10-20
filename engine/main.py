@@ -4,6 +4,7 @@ from html import escape
 import asyncio
 import logging
 import os
+import threading
 
 import google_auth
 import shula_agent
@@ -52,6 +53,28 @@ def _answer_in_background(sender: str, user_message: str) -> None:
         _send_whatsapp(sender, text)
     except Exception:
         log.exception("Twilio send failed")
+
+
+_push_blocked = False  # נדלק אם Twilio חוסם שליחה יזומה (KYC לא אושר)
+
+
+def _push_when_ready(sender: str, fut) -> None:
+    """כשהתשובה מוכנה — מנסה לשלוח אותה לבד. אם Twilio חוסם, היא נשארת ממתינה ל'המשך'."""
+    if fut.cancelled() or fut.exception() is not None:
+        return
+
+    def run():
+        global _push_blocked
+        try:
+            _send_whatsapp(sender, fut.result())
+            if _pending.get(sender) is fut:
+                _pending.pop(sender, None)
+        except Exception as e:
+            if "compliance" in str(e).lower() or "KYC" in str(e):
+                _push_blocked = True
+            log.warning("push failed, answer waits for next message: %s", str(e)[:200])
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://shula-x5mr.onrender.com")
@@ -142,10 +165,6 @@ async def whatsapp_webhook(
         shula_agent.forget(From)
         return _twiml("איפסתי את השיחה. מתחילים מחדש 🙂")
 
-    if ASYNC_MODE:
-        background.add_task(_answer_in_background, From, user_message)
-        return PlainTextResponse(content=EMPTY_TWIML, media_type="application/xml")
-
     # יש תשובה שממתינה מההודעה הקודמת? נמסור אותה קודם.
     pending = _pending.pop(From, None)
     if pending is not None:
@@ -172,6 +191,8 @@ async def whatsapp_webhook(
     text = await _collect(fut, SYNC_DEADLINE)
     if text is None:
         _pending[From] = fut
+        if ASYNC_MODE and not _push_blocked:
+            fut.add_done_callback(lambda f, s=From: _push_when_ready(s, f))
         return _twiml("רגע, בודקת… 🔎 שלח לי 'המשך' בעוד כמה שניות ואמסור את התשובה.")
     return _twiml(text)
 
