@@ -62,6 +62,26 @@ def _ensure_loaded():
             log.info("memory loaded for %d senders", len(_histories))
 
 
+_agenda_cache = {"ts": 0.0, "text": ""}
+
+
+def _agenda() -> str:
+    """היומן של היום+מחר (שמור 3 דקות) — כדי ששולה תענה מיד בלי לקרוא לכלי."""
+    import time
+    from tools_calendar import get_calendar_events
+    if time.time() - _agenda_cache["ts"] > 180:
+        try:
+            _agenda_cache["text"] = get_calendar_events(days_ahead=2)
+        except Exception:
+            _agenda_cache["text"] = ""
+        _agenda_cache["ts"] = time.time()
+    return _agenda_cache["text"]
+
+
+def _invalidate_agenda():
+    _agenda_cache["ts"] = 0.0
+
+
 def _system_prompt(bot_name: str) -> str:
     base = manager.get_bot_prompt(bot_name) or ""
     now = datetime.now(TZ)
@@ -70,8 +90,14 @@ def _system_prompt(bot_name: str) -> str:
         "גוגל (יומן, ג'ימייל, דרייב): " + ("מחובר ✅" if google_ok else "עדיין לא מחובר"),
         "רשתות חברתיות: " + ("מחובר ✅" if os.environ.get("METRICOOL_TOKEN") else "לא מחובר — אם יוסי מבקש פוסט, נסחי לו את הטקסט מוכן להעתקה"),
     ]
+    agenda = _agenda() if google_ok else ""
+    agenda_txt = (
+        f"היומן של יוסי להיום ומחר (מעודכן, אין צורך לקרוא לכלי בשביל זה):\n{agenda}\n" if agenda else ""
+    )
     return (
         f"{base}\n\n"
+        f"{agenda_txt}"
+        "ענִי מהר וישר לעניין, בלי לחשוב יותר מדי.\n"
         f"עכשיו: יום {DAYS_HE[now.weekday()]}, {now.strftime('%d/%m/%Y %H:%M')} (שעון ישראל).\n"
         f"מצב חיבורים: {' | '.join(status)}\n"
         "כשיוסי שואל על היומן, מיילים או קבצים — השתמשי בכלים, אל תנחשי. "
@@ -124,6 +150,12 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
         _histories[sender] = _from_gemini_history(chat.history)[-MAX_HISTORY:]
         text = _safe_text(response)
         _log_usage(sender, user_message, response)
+        try:
+            if any(getattr(getattr(p, "function_call", None), "name", "") in ("create_calendar_event", "delete_calendar_event")
+                   for c in chat.history for p in c.parts):
+                _invalidate_agenda()
+        except Exception:
+            _invalidate_agenda()
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
     return text or "לא הצלחתי לנסח תשובה, נסה שוב."
 
