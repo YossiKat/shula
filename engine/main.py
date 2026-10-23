@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, BackgroundTasks
+from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from html import escape
 import asyncio
@@ -26,9 +26,6 @@ SYNC_DEADLINE = 12  # שניות — מתחת ל-15 של Twilio
 _pending: dict[str, asyncio.Future] = {}
 NUDGES = {"המשך", "נו", "?", "??", "...", "ok", "אוקיי", "טוב"}
 
-EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-
-
 def _twiml(text: str) -> PlainTextResponse:
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n    <Message>{escape(text)}</Message>\n</Response>'
     return PlainTextResponse(content=xml, media_type="application/xml")
@@ -41,18 +38,6 @@ def _send_whatsapp(to: str, text: str) -> None:
     chunks = [text[i:i + 1500] for i in range(0, len(text), 1500)] or [text]
     for chunk in chunks:
         client.messages.create(from_=TWILIO_FROM, to=to, body=chunk)
-
-
-def _answer_in_background(sender: str, user_message: str) -> None:
-    try:
-        text = shula_agent.reply(sender, user_message)
-    except Exception as e:
-        log.exception("Shula failed")
-        text = f"שולה נתקלה בבעיה טכנית: {str(e)[:300]}"
-    try:
-        _send_whatsapp(sender, text)
-    except Exception:
-        log.exception("Twilio send failed")
 
 
 _push_blocked = False  # נדלק אם Twilio חוסם שליחה יזומה (KYC לא אושר)
@@ -148,7 +133,6 @@ async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str =
 
 @app.post("/whatsapp", response_class=PlainTextResponse)
 async def whatsapp_webhook(
-    background: BackgroundTasks,
     Body: str = Form(""),
     From: str = Form(""),
     NumMedia: str = Form("0"),
