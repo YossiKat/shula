@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Header, Request
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from html import escape
 import asyncio
@@ -25,6 +25,23 @@ SYNC_DEADLINE = 12  # שניות — מתחת ל-15 של Twilio
 # תשובות שלא הספיקו בזמן — נמסרות בהודעה הבאה של אותו שולח
 _pending: dict[str, asyncio.Future] = {}
 NUDGES = {"המשך", "נו", "?", "??", "...", "ok", "אוקיי", "טוב"}
+
+# רק המספרים האלה מדברים עם שולה (מופרדים בפסיק). ברירת מחדל: יוסי.
+ALLOWED_SENDERS = {
+    s.strip() for s in os.environ.get("ALLOWED_SENDERS", "whatsapp:+972547599993").split(",") if s.strip()
+}
+
+
+def _from_twilio(request: Request, form: dict, signature: str) -> bool:
+    """בודק שההודעה באמת הגיעה מ-Twilio (חתימה עם ה-Auth Token), ולא ממישהו שמתחזה."""
+    if not TWILIO_TOKEN:
+        return True  # בלי טוקן אין איך לבדוק — מסתמכים על רשימת המספרים
+    from twilio.request_validator import RequestValidator
+    url = f"{PUBLIC_URL}{request.url.path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+    return RequestValidator(TWILIO_TOKEN).validate(url, form, signature or "")
+
 
 def _twiml(text: str) -> PlainTextResponse:
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n    <Message>{escape(text)}</Message>\n</Response>'
@@ -122,7 +139,14 @@ def google_auth_callback(code: str = "", state: str = "", error: str = ""):
 
 
 @app.post("/ask")
-async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str = "api"):
+async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str = "api",
+                    x_shula_key: str = Header("")):
+    # לשולה יש גישה למייל וליומן — בלי מפתח סודי, אף אחד לא נכנס מכאן
+    expected = os.environ.get("ASK_KEY", "")
+    if not expected or x_shula_key != expected:
+        return PlainTextResponse("forbidden", status_code=403)
+    if bot_name not in shula_agent.manager.list_available_bots():
+        return PlainTextResponse("unknown bot", status_code=404)
     try:
         text = await asyncio.to_thread(shula_agent.reply, sender, user_input, bot_name)
     except Exception as e:
@@ -133,11 +157,21 @@ async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str =
 
 @app.post("/whatsapp", response_class=PlainTextResponse)
 async def whatsapp_webhook(
+    request: Request,
     Body: str = Form(""),
     From: str = Form(""),
     NumMedia: str = Form("0"),
+    x_twilio_signature: str = Header(""),
 ):
     """Twilio WhatsApp Webhook"""
+    form = {k: v for k, v in (await request.form()).items()}
+    if not _from_twilio(request, form, x_twilio_signature):
+        log.warning("rejected /whatsapp: bad Twilio signature")
+        return PlainTextResponse("forbidden", status_code=403)
+    if From not in ALLOWED_SENDERS:
+        log.warning("ignored message from unknown sender …%s", From[-4:])
+        return PlainTextResponse('<?xml version="1.0" encoding="UTF-8"?><Response/>', media_type="application/xml")
+
     user_message = Body.strip()
     if NumMedia not in ("", "0"):
         user_message = (user_message + "\n[יוסי צירף קובץ/תמונה — עדיין אין לי יכולת לראות תמונות, בקשי ממנו לכתוב מה יש שם]").strip()

@@ -17,8 +17,9 @@ COLOR_IDS = {
     "done": "7",      # תכלת  — משימות שבוצעו
     "bike": "10",     # ירוק  — שיעורי אופניים
     "meeting": "11",  # אדום  — פגישות ושיחות זום
+    "mentors": "5",   # צהוב  — מפגשי תוכנית המנטורים (קבוצת פיברו)
 }
-COLOR_NAMES = {"6": "🟠 הוצאה", "7": "🔵 בוצע", "10": "🟢 שיעור אופניים", "11": "🔴 פגישה"}
+COLOR_NAMES = {"6": "🟠 הוצאה", "7": "🔵 בוצע", "10": "🟢 שיעור אופניים", "11": "🔴 פגישה", "5": "🟡 מנטורים"}
 
 _service = None
 
@@ -101,7 +102,7 @@ def create_calendar_event(
 ) -> str:
     """יוצר אירוע חדש ביומן של יוסי.
     start_iso: תאריך ושעה בפורמט YYYY-MM-DDTHH:MM (שעון ישראל).
-    category: אחד מ-'meeting' (פגישה/זום, אדום), 'bike' (שיעור אופניים, ירוק), 'expense' (הוצאה, כתום), 'done' (משימה שבוצעה, תכלת).
+    category: אחד מ-'meeting' (פגישה/זום, אדום), 'bike' (שיעור אופניים, ירוק), 'expense' (הוצאה, כתום), 'done' (משימה שבוצעה, תכלת), 'mentors' (מפגש תוכנית המנטורים / פיברו, צהוב).
     """
     start = datetime.fromisoformat(start_iso).replace(tzinfo=TZ)
     end = start + timedelta(minutes=duration_minutes)

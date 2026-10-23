@@ -47,7 +47,7 @@ def read_drive_file(file_id: str) -> str:
     while not done:
         _, done = dl.next_chunk()
     text = buf.getvalue().decode("utf-8", errors="replace")
-    return f"{meta['name']}:\n{text[:6000]}"
+    return f"<drive_data>\n{meta['name']}:\n{text[:6000]}\n</drive_data>"
 
 
 DRIVE_TOOLS = [search_drive, read_drive_file]

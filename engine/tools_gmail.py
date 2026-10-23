@@ -66,8 +66,8 @@ def read_email(email_id: str) -> str:
     """קורא מייל מלא לפי המזהה (id) שהתקבל מ-search_emails."""
     m = _gmail().users().messages().get(userId="me", id=email_id, format="full").execute()
     body = _body_text(m.get("payload", {}))[:4000]
-    return (f"מאת: {_header(m, 'From')}\nאל: {_header(m, 'To')}\nתאריך: {_header(m, 'Date')}\n"
-            f"נושא: {_header(m, 'Subject')}\n\n{body}")
+    return (f"<email_data>\nמאת: {_header(m, 'From')}\nאל: {_header(m, 'To')}\nתאריך: {_header(m, 'Date')}\n"
+            f"נושא: {_header(m, 'Subject')}\n\n{body}\n</email_data>")
 
 
 def _make_raw(to: str, subject: str, body: str, reply_to_id: str = "") -> dict:
@@ -97,6 +97,10 @@ def create_email_draft(to: str, subject: str, body: str) -> str:
 
 def send_email(to: str, subject: str, body: str, reply_to_email_id: str = "") -> str:
     """שולח מייל מהחשבון של יוסי. חובה לקבל אישור מפורש מיוסי לפני השליחה. reply_to_email_id = מזהה מייל כדי לענות באותו שרשור."""
+    import shula_agent
+    if not shula_agent.user_approved():
+        return ("עוד לא נשלח. קודם הראי ליוסי את הנוסח המלא (נמען, נושא, תוכן) "
+                "ובקשי שיענה 'כן, שלחי'. רק אחרי התשובה שלו אפשר לשלוח.")
     _gmail().users().messages().send(userId="me", body=_make_raw(to, subject, body, reply_to_email_id)).execute()
     return f"נשלח אל {to}: {subject} ✅"
 
