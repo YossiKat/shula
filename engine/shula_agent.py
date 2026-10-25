@@ -5,6 +5,7 @@ import functools
 import logging
 import os
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -12,6 +13,7 @@ from zoneinfo import ZoneInfo
 import google.generativeai as genai
 
 import google_auth
+import conversation_log
 import memory_store
 from bot_manager import BotManager
 from tools_calendar import CALENDAR_TOOLS
@@ -163,11 +165,11 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
             # מספיק מקום גם ל"חשיבה" של המודל וגם לתשובה — 800 היה קטן מדי ונקטע (finish_reason 2)
             generation_config={"max_output_tokens": 4096, "temperature": 0.6},
         )
-        chat = model.start_chat(
-            history=_to_gemini_history(_histories[sender]),
-            enable_automatic_function_calling=True,
-        )
+        prior = _to_gemini_history(_histories[sender])
+        chat = model.start_chat(history=prior, enable_automatic_function_calling=True)
+        started = time.monotonic()
         response = chat.send_message(user_message, request_options={"timeout": 60})
+        seconds = time.monotonic() - started
         _histories[sender] = _from_gemini_history(chat.history)[-MAX_HISTORY:]
         text = _safe_text(response)
         _log_usage(sender, user_message, response)
@@ -177,8 +179,25 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
                 _invalidate_agenda()
         except Exception:
             _invalidate_agenda()
+        tools_used = _tools_in_turn(chat.history[len(prior):])
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
-    return text or "לא הצלחתי לנסח תשובה, נסה שוב."
+    final = text or "לא הצלחתי לנסח תשובה, נסה שוב."
+    conversation_log.log_exchange(user_message, final, tools_used, seconds)
+    return final
+
+
+def _tools_in_turn(contents) -> list[str]:
+    """שמות הכלים שהמודל הפעיל בתור הזה (לבדיקה השבועית)."""
+    names = []
+    try:
+        for c in contents:
+            for p in c.parts:
+                name = getattr(getattr(p, "function_call", None), "name", "")
+                if name:
+                    names.append(name)
+    except Exception:
+        pass
+    return names
 
 
 # ---------- יומן שימוש (לדוח היומי של יוסי) ----------
