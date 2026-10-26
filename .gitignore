@@ -3,3 +3,4 @@ __pycache__/
 .env
 graphify-out/cache/
 graphify-out/.graphify_*
+.claude/settings.json
