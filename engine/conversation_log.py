@@ -38,15 +38,40 @@ def _get_label_id() -> str:
     return _label_id
 
 
-def format_entry(question: str, answer: str, tools: list[str], seconds: float) -> tuple[str, str]:
+CORRECTION_MARK = "🔧 תיקון"
+# ביטויים שבהם יוסי בדרך כלל מתקן את שולה
+_CORRECTION_PATTERNS = (
+    "טעית", "לא נכון", "לא ככה", "לא זה", "התכוונתי", "לא התכוונתי", "לא ביקשתי",
+    "אמרתי לך", "כבר אמרתי", "תתקני", "תקני", "למה עשית", "למה רשמת", "לא מה שביקשתי",
+    "שוב פעם", "עוד פעם טעות", "לא הבנת", "את לא מבינה", "בטעות",
+)
+
+
+def is_correction(text: str) -> bool:
+    """האם ההודעה של יוסי נראית כמו תיקון של שולה."""
+    t = (text or "").strip()
+    if t.startswith(("לא,", "לא.", "לא!")) and len(t) > 3:
+        return True
+    return any(p in t for p in _CORRECTION_PATTERNS)
+
+
+def format_entry(question: str, answer: str, tools: list[str], seconds: float,
+                 previous_answer: str = "") -> tuple[str, str]:
     """מחזיר (נושא, גוף) לרשומה אחת."""
     now = datetime.now(TZ)
     slow = " ⏳" if seconds > 12 else ""
-    subject = f"שולה | {now:%d.%m %H:%M}{slow} | {question[:60]}"
+    correction = is_correction(question)
+    fix = f" {CORRECTION_MARK}" if correction else ""
+    subject = f"שולה | {now:%d.%m %H:%M}{slow}{fix} | {question[:60]}"
+    before = (
+        f"🔧 יוסי תיקן את שולה. התשובה הקודמת של שולה (זו שתוקנה):\n{previous_answer}\n\n"
+        if correction and previous_answer else ""
+    )
     body = (
         f"זמן: {now:%d.%m.%Y %H:%M}\n"
         f"זמן תגובה: {seconds:.1f} שניות" + (" (יוסי קיבל 'רגע, בודקת' וחיכה)" if seconds > 12 else "") + "\n"
         f"כלים שהופעלו: {', '.join(tools) if tools else 'אין'}\n\n"
+        f"{before}"
         f"יוסי כתב:\n{question}\n\n"
         f"שולה ענתה:\n{answer}\n"
     )
@@ -65,11 +90,12 @@ def _insert(subject: str, body: str) -> None:
     ).execute()
 
 
-def log_exchange(question: str, answer: str, tools: list[str], seconds: float) -> None:
+def log_exchange(question: str, answer: str, tools: list[str], seconds: float,
+                 previous_answer: str = "") -> None:
     """שומר ברקע. אף פעם לא מפיל את התשובה ליוסי."""
     if not google_auth.is_connected():
         return
-    subject, body = format_entry(question, answer, tools, seconds)
+    subject, body = format_entry(question, answer, tools, seconds, previous_answer)
 
     def run():
         try:

@@ -101,8 +101,23 @@ def _invalidate_agenda():
     _agenda_cache["ts"] = 0.0
 
 
+LEARNED_RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "learned_rules.txt")
+
+
+def _learned_rules() -> str:
+    """כללים שיוסי אישר אחרי הבדיקה השבועית של התיקונים שלו (קובץ learned_rules.txt)."""
+    try:
+        with open(LEARNED_RULES_FILE, encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")]
+    except OSError:
+        return ""
+    if not lines:
+        return ""
+    return "כללים שלמדתי מהתיקונים של יוסי (הוא אישר אותם, הם גוברים על הרגלים קודמים):\n" + "\n".join(lines) + "\n\n"
+
+
 def _system_prompt(bot_name: str) -> str:
-    base = manager.get_bot_prompt(bot_name) or ""
+    base = (manager.get_bot_prompt(bot_name) or "") + "\n\n" + _learned_rules()
     now = datetime.now(TZ)
     google_ok = google_auth.is_connected() or bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
     status = [
@@ -166,6 +181,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
             generation_config={"max_output_tokens": 4096, "temperature": 0.6},
         )
         prior = _to_gemini_history(_histories[sender])
+        previous_answer = next((m["text"] for m in reversed(_histories[sender]) if m.get("role") == "model"), "")
         chat = model.start_chat(history=prior, enable_automatic_function_calling=True)
         started = time.monotonic()
         response = chat.send_message(user_message, request_options={"timeout": 60})
@@ -182,7 +198,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
         tools_used = _tools_in_turn(chat.history[len(prior):])
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
     final = text or "לא הצלחתי לנסח תשובה, נסה שוב."
-    conversation_log.log_exchange(user_message, final, tools_used, seconds)
+    conversation_log.log_exchange(user_message, final, tools_used, seconds, previous_answer)
     return final
 
 
