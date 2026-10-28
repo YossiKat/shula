@@ -1,17 +1,17 @@
 # Graph Report - shula  (2026-10-28)
 
 ## Corpus Check
-- 24 files · ~6,594 words
+- 24 files · ~6,690 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 1 file(s) not represented in the graph (top: (none) 1)
 
 ## Summary
-- 304 nodes · 468 edges · 15 communities (14 shown, 1 thin omitted)
+- 305 nodes · 469 edges · 15 communities (14 shown, 1 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 36 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `494ca395`
+- Built from commit: `c9e86010`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -75,8 +75,8 @@ Cohesion: 0.06
 Nodes (22): BotManager, _agenda(), _ensure_loaded(), forget(), _from_gemini_history(), _invalidate_agenda(), _learned_rules(), _log_usage() (+14 more)
 
 ### Community 2 - "WhatsApp Webhook Server"
-Cohesion: 0.10
-Nodes (13): ask_shula(), _collect(), _from_twilio(), google_auth_callback(), google_auth_start(), _page(), _push_when_ready(), run() (+5 more)
+Cohesion: 0.09
+Nodes (14): ask_shula(), _collect(), _from_twilio(), google_auth_callback(), google_auth_start(), _page(), _push_when_ready(), run() (+6 more)
 
 ### Community 3 - "Gmail Tools & Email Gate"
 Cohesion: 0.11
@@ -95,8 +95,8 @@ Cohesion: 0.36
 Nodes (5): _headers(), list_scheduled_posts(), _norm_networks(), _params(), schedule_social_post()
 
 ### Community 7 - "WhatsApp Tests"
-Cohesion: 0.14
-Nodes (9): client(), _send(), test_answer_is_xml_escaped(), test_empty_message_gets_greeting(), test_fast_answer_comes_back_directly(), test_push_blocked_keeps_answer_for_nudge(), test_reset_clears_memory(), test_slow_answer_is_delivered_on_nudge() (+1 more)
+Cohesion: 0.16
+Nodes (8): client(), _send(), test_answer_is_xml_escaped(), test_empty_message_gets_greeting(), test_fast_answer_comes_back_directly(), test_reset_clears_memory(), test_slow_answer_is_delivered_on_nudge(), test_stranger_is_ignored()
 
 ### Community 8 - "Weekly Conversation Log"
 Cohesion: 0.13
@@ -130,7 +130,7 @@ Nodes (3): Security Policy, Supported Versions table, Reporting a Vulnerability
 
 ## Knowledge Gaps
 - **6 isolated node(s):** `Conversation memory`, `Yossi Kat (user)`, `requests 2.32.3`, `Shulamit OS - Strategic Command Center`, `Supported Versions table` (+1 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 115 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 116 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions

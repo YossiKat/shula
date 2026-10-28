@@ -72,9 +72,9 @@
     "semantic_hash": "58598854e030fd898bdbea67f61532a2"
   },
   "engine/tests/test_conversation_log.py": {
-    "mtime": 1793179770.8841956,
-    "seen": 1793179822.6835322,
-    "ast_hash": "6e575bc8e23730051d2c07533f3ad68c",
+    "mtime": 1793204565.5776138,
+    "seen": 1793204578.1470408,
+    "ast_hash": "52a0ffea16e8356b0e31be8ae0b4bef8",
     "semantic_hash": ""
   },
   "engine/tests/test_email_gate.py": {
@@ -138,10 +138,10 @@
     "semantic_hash": "b1060e70aaff0e2baed6fc1d91ebe9b3"
   },
   "engine/bots/core_shula.txt": {
-    "mtime": 1792927329.0698524,
-    "seen": 1793009534.5858939,
-    "ast_hash": "6b15e7263d1b7fec6c5d94a648e5284c",
-    "semantic_hash": "6b15e7263d1b7fec6c5d94a648e5284c"
+    "mtime": 1793204565.5776138,
+    "seen": 1793204578.1470604,
+    "ast_hash": "f10d5c8b9ce9a53ac1bc151dafb88445",
+    "semantic_hash": ""
   },
   "engine/requirements.txt": {
     "mtime": 1792062598.8961766,

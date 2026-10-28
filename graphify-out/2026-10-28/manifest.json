@@ -24,10 +24,10 @@
     "semantic_hash": "376104f58741b7c27cab7297931388cd"
   },
   "engine/conversation_log.py": {
-    "mtime": 1792927345.9391592,
-    "seen": 1793009534.5858657,
-    "ast_hash": "413c158686f0684df12ec50d57a6e333",
-    "semantic_hash": "413c158686f0684df12ec50d57a6e333"
+    "mtime": 1793179763.260195,
+    "seen": 1793179822.683518,
+    "ast_hash": "0613d5ce8287a734ff63850871d82446",
+    "semantic_hash": ""
   },
   "engine/google_auth.py": {
     "mtime": 1792062501.5801709,
@@ -48,10 +48,10 @@
     "semantic_hash": "d880c7346f3830c11f19f812e3da61c8"
   },
   "engine/shula_agent.py": {
-    "mtime": 1792927313.3180296,
-    "seen": 1793009534.5858722,
-    "ast_hash": "3aef1daafd65e6de80ba4dc315a6d91d",
-    "semantic_hash": "3aef1daafd65e6de80ba4dc315a6d91d"
+    "mtime": 1793179757.5681946,
+    "seen": 1793179822.6835258,
+    "ast_hash": "e2dd1e95fe5c42b97022cfa8de573b35",
+    "semantic_hash": ""
   },
   "engine/tests/conftest.py": {
     "mtime": 1792736098.3012855,
@@ -72,10 +72,10 @@
     "semantic_hash": "58598854e030fd898bdbea67f61532a2"
   },
   "engine/tests/test_conversation_log.py": {
-    "mtime": 1792927329.0756109,
-    "seen": 1793009534.5858781,
-    "ast_hash": "c24237024f5f4f7b582a21040c4a80ac",
-    "semantic_hash": "c24237024f5f4f7b582a21040c4a80ac"
+    "mtime": 1793179770.8841956,
+    "seen": 1793179822.6835322,
+    "ast_hash": "6e575bc8e23730051d2c07533f3ad68c",
+    "semantic_hash": ""
   },
   "engine/tests/test_email_gate.py": {
     "mtime": 1792927259.4268987,
@@ -148,5 +148,17 @@
     "seen": 1793009534.585895,
     "ast_hash": "6c34d554b13b792b3a95f40092e71e91",
     "semantic_hash": "6c34d554b13b792b3a95f40092e71e91"
+  },
+  "CLAUDE.md": {
+    "mtime": 1793009561.6186125,
+    "seen": 1793179822.683546,
+    "ast_hash": "67d88e9d0760c3ba54c75dfd9551c1c5",
+    "semantic_hash": ""
+  },
+  "engine/learned_rules.txt": {
+    "mtime": 1793179765.3041952,
+    "seen": 1793179822.6835525,
+    "ast_hash": "3a6aa30e3c1249554b1a8394c07639c8",
+    "semantic_hash": ""
   }
 }

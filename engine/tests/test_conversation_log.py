@@ -57,3 +57,9 @@ def test_values_section_in_prompt():
     import shula_agent
     prompt = shula_agent.manager.get_bot_prompt("core_shula")
     assert "ערכים ואופי" in prompt and "אני לא בטוחה" in prompt
+
+
+def test_morning_briefing_is_bilingual():
+    import shula_agent
+    prompt = shula_agent.manager.get_bot_prompt("core_shula")
+    assert "תדריך בוקר (עברית + אנגלית)" in prompt and "🇬🇧 English" in prompt

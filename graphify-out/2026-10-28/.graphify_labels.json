@@ -1,1 +1,15 @@
-{"0": "Shula Persona & Rules", "1": "Agent Brain & Memory", "2": "WhatsApp Webhook Server", "3": "Gmail Tools & Email Gate", "4": "Google OAuth Connection", "5": "Calendar Tools & Tests", "6": "Bot Prompt Loader", "7": "WhatsApp Tests", "8": "Weekly Conversation Log", "9": "CI Test Workflow", "10": "Deploy Workflow", "11": "Keepalive Ping", "12": "Render Deployment Config", "13": "Security Policy Template"}
+{
+  "0": "Shula Persona & Rules",
+  "1": "Agent Brain & Memory",
+  "2": "WhatsApp Webhook Server",
+  "3": "Gmail Tools & Email Gate",
+  "4": "Google OAuth Connection",
+  "5": "Calendar Tools & Tests",
+  "7": "WhatsApp Tests",
+  "8": "Weekly Conversation Log",
+  "9": "CI Test Workflow",
+  "10": "Deploy Workflow",
+  "11": "Keepalive Ping",
+  "12": "Render Deployment Config",
+  "13": "Security Policy Template"
+}
