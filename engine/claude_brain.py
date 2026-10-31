@@ -15,11 +15,11 @@ import typing
 
 log = logging.getLogger("shula.claude")
 
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5-5")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")  # הזול והמהיר; לשדרוג: CLAUDE_MODEL=claude-sonnet-5-5
 MAX_TOOL_ROUNDS = 8
 # הערכת מחיר לדוח השימוש בלבד (דולר למיליון טוקנים) — אפשר לעדכן ב-Render בלי לשנות קוד
-PRICE_IN = float(os.environ.get("CLAUDE_PRICE_IN", "3")) / 1_000_000
-PRICE_OUT = float(os.environ.get("CLAUDE_PRICE_OUT", "15")) / 1_000_000
+PRICE_IN = float(os.environ.get("CLAUDE_PRICE_IN", "0.10")) / 1_000_000
+PRICE_OUT = float(os.environ.get("CLAUDE_PRICE_OUT", "0.50")) / 1_000_000
 PRICE_CACHE_READ = PRICE_IN * 0.1
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean"}
