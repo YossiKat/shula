@@ -141,3 +141,26 @@ def test_keep_awake_starts_on_render(monkeypatch):
     monkeypatch.setattr(main.threading, "Thread", T)
     main._start_keep_awake()
     assert started == [1]
+
+
+def test_slow_answer_in_async_mode_sends_no_waiting_message(client, monkeypatch):
+    # יוסי לא רוצה לקבל "רגע, בודקת… שלח לי המשך" — התשובה תגיע לבד
+    pushed = []
+    monkeypatch.setattr(main, "ASYNC_MODE", True)
+    monkeypatch.setattr(main, "_push_blocked", False)
+    monkeypatch.setattr(main, "_send_whatsapp", lambda to, text: pushed.append(text))
+    monkeypatch.setattr(main.shula_agent, "reply", lambda *a: (time.sleep(0.6), "התשובה המלאה")[1])
+    xml = _send(client, "שאלה קשה")
+    assert "בודקת" not in xml and "המשך" not in xml
+    for _ in range(40):
+        if pushed:
+            break
+        time.sleep(0.05)
+    assert pushed == ["התשובה המלאה"]
+
+
+def test_waiting_message_stays_when_push_is_blocked(client, monkeypatch):
+    monkeypatch.setattr(main, "ASYNC_MODE", True)
+    monkeypatch.setattr(main, "_push_blocked", True)
+    monkeypatch.setattr(main.shula_agent, "reply", lambda *a: (time.sleep(0.6), "x")[1])
+    assert "המשך" in _send(client, "שאלה קשה")

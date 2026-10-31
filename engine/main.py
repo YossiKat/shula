@@ -52,6 +52,11 @@ def _twiml(text: str) -> PlainTextResponse:
     return PlainTextResponse(content=xml, media_type="application/xml")
 
 
+def _silent() -> PlainTextResponse:
+    """תשובה ריקה ל-Twilio — לא נשלחת שום הודעה ליוסי."""
+    return PlainTextResponse('<?xml version="1.0" encoding="UTF-8"?><Response/>', media_type="application/xml")
+
+
 def _send_whatsapp(to: str, text: str) -> None:
     from twilio.rest import Client
     client = Client(TWILIO_SID, TWILIO_TOKEN)
@@ -238,6 +243,10 @@ async def whatsapp_webhook(
                     second = await asyncio.to_thread(shula_agent.reply, From, msg)
                     return f"{first}\n\n{second}"
                 _pending[From] = asyncio.ensure_future(chain())
+                if ASYNC_MODE and not _push_blocked:
+                    _pending[From].add_done_callback(lambda f, s=From: _push_when_ready(s, f))
+            if ASYNC_MODE and not _push_blocked:
+                return _silent()  # התשובה בדרך ותישלח לבד
             return _twiml("עוד רגע, אני עדיין בודקת… שלח לי 'המשך' בעוד כמה שניות.")
         if user_message in NUDGES:
             return _twiml(text)
@@ -251,7 +260,9 @@ async def whatsapp_webhook(
     if text is None:
         _pending[From] = fut
         if ASYNC_MODE and not _push_blocked:
+            # התשובה תישלח לבד כשתהיה מוכנה (יוסי רואה "מקלידה...") — בלי הודעת "שלח המשך"
             fut.add_done_callback(lambda f, s=From: _push_when_ready(s, f))
+            return _silent()
         return _twiml("רגע, בודקת… 🔎 שלח לי 'המשך' בעוד כמה שניות ואמסור את התשובה.")
     return _twiml(text)
 
