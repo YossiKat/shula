@@ -86,7 +86,7 @@ PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://shula-x5mr.onrender.com")
 def root():
     return {
         "status": "שולה פעילה ✅",
-        "model": shula_agent.GEMINI_MODEL,
+        "model": shula_agent.model_name(),
         "async_mode": ASYNC_MODE,
         "google": google_auth.is_connected(),
         "google_accounts": google_auth.connected_accounts(),
