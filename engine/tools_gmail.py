@@ -117,6 +117,7 @@ def send_email(to: str, subject: str, body: str, reply_to_email_id: str = "", fr
                 "ובקשי שיענה 'כן, שלחי'. רק אחרי התשובה שלו אפשר לשלוח.")
     acct, reply_id = _sender(from_account, reply_to_email_id)
     _gmail(acct).users().messages().send(userId="me", body=_make_raw(to, subject, body, reply_id, acct)).execute()
+    shula_agent.consume_approval()
     return f"נשלח מ-{google_auth.ACCOUNTS[acct]['email']} אל {to}: {subject} ✅"
 
 

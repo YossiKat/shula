@@ -49,6 +49,10 @@ def schedule_social_post(text: str, networks: str, publish_at_iso: str, image_ur
     publish_at_iso: מועד הפרסום YYYY-MM-DDTHH:MM (שעון ישראל), חייב להיות בעתיד.
     image_url: כתובת ציבורית של תמונה/וידאו (חובה לאינסטגרם ולטיקטוק).
     """
+    import shula_agent
+    if not shula_agent.user_approved():
+        return ("עוד לא תוזמן. קודם הראי ליוסי את הפוסט המלא (טקסט, רשתות, מועד ותמונה) "
+                "ובקשי שיענה 'כן, פרסמי'. רק אחרי התשובה שלו אפשר לתזמן.")
     nets = _norm_networks(networks)
     if not nets:
         return "לא זיהיתי רשת. אפשר: facebook, instagram, linkedin, tiktok, youtube."
@@ -85,6 +89,7 @@ def schedule_social_post(text: str, networks: str, publish_at_iso: str, image_ur
     r = requests.post(f"{BASE}/v2/scheduler/posts", headers=_headers(), params=_params(), json=info, timeout=30)
     if r.status_code >= 300:
         return f"Metricool החזיר שגיאה {r.status_code}: {r.text[:300]}"
+    shula_agent.consume_approval()
     return f"תוזמן ל-{when.strftime('%d/%m %H:%M')} ב-{', '.join(nets)} ✅"
 
 

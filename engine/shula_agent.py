@@ -4,6 +4,7 @@
 import functools
 import logging
 import os
+import re
 import threading
 import time
 from collections import defaultdict
@@ -54,13 +55,32 @@ _loaded = False
 
 # אישור לשליחת מייל: נבדק בקוד, לא רק בהנחיות — כדי שמייל זדוני לא יוכל "לשכנע" את שולה לשלוח
 _turn = threading.local()
-APPROVALS = ("כן", "שלחי", "תשלחי", "מאשר", "מאשרת", "מאושר", "אשר", "יאללה", "סבבה", "yes", "send", "ok")
+APPROVALS = {"כן", "שלחי", "תשלחי", "מאשר", "מאשרת", "מאושר", "אשר", "אשרי", "יאללה", "סבבה", "מחקי", "תמחקי",
+             "פרסמי", "תפרסמי", "שלח", "תשלח", "מחק", "תמחק", "פרסם", "תפרסם", "אישור", "בטח", "בהחלט",
+             "יאלה", "סגור", "yes", "send", "ok", "okay", "sure", "approve", "approved", "אוקיי", "אוקי", "בסדר"}
+# מילים שמותר שיופיעו לצד האישור ("כן, שלחי לה בבקשה") — אבל לא בקשה חדשה
+_FILLER = {"את", "זה", "זאת", "לה", "לו", "להם", "אותו", "אותה", "אותם", "בבקשה", "תודה", "יופי", "מעולה",
+           "עכשיו", "נו", "please", "go", "ahead", "it", "now", "thanks", "שולה"}
 
 
 def user_approved() -> bool:
-    """האם ההודעה הנוכחית של יוסי היא אישור קצר ומפורש (למשל 'כן, שלחי')."""
+    """האם ההודעה הנוכחית של יוסי היא אישור קצר ומפורש (למשל 'כן, שלחי').
+    כל מילה בהודעה חייבת להיות מילת אישור או מילת מילוי — כך 'מוכן', 'עדכן' או 'יאללה סכמי לי את המיילים'
+    לא נחשבים אישור. אישור תקף לפעולה אחת בלבד בכל הודעה (ראו consume_approval)."""
+    if getattr(_turn, "approval_used", False):
+        return False
     msg = (getattr(_turn, "message", "") or "").strip().lower()
-    return 0 < len(msg) <= 40 and any(w in msg for w in APPROVALS)
+    if not 0 < len(msg) <= 40:
+        return False
+    if msg in ("👍", "✅", "👌"):
+        return True
+    words = re.findall(r"[\w\u0590-\u05ff]+", msg)
+    return bool(words) and any(w in APPROVALS for w in words) and all(w in APPROVALS or w in _FILLER for w in words)
+
+
+def consume_approval() -> None:
+    """פעולה רגישה בוצעה — האישור נוצל ולא יפעל שוב באותה הודעה (כדי שמייל זדוני לא ינצל אותו פעם שנייה)."""
+    _turn.approval_used = True
 
 
 DAYS_HE = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
@@ -197,6 +217,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula") -> str:
     _ensure_loaded()
     with _locks[sender]:
         _turn.message = user_message
+        _turn.approval_used = False
         previous_answer = next((m["text"] for m in reversed(_histories[sender]) if m.get("role") == "model"), "")
         started = time.monotonic()
         result = None

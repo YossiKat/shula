@@ -2,6 +2,7 @@ from fastapi import FastAPI, Form, Header, Request
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from html import escape
 import asyncio
+import hmac
 import logging
 import os
 import threading
@@ -94,11 +95,16 @@ def root():
     }
 
 
+def _key_ok(given: str, env_name: str) -> bool:
+    """השוואת מפתח סודי בזמן קבוע (כדי שאי אפשר יהיה לנחש אותו אות אחרי אות)."""
+    expected = os.environ.get(env_name, "")
+    return bool(expected) and hmac.compare_digest((given or "").encode(), expected.encode())
+
+
 @app.get("/usage")
-def usage(days: int = 1, key: str = ""):
-    """סיכום שימוש ב-Gemini דרך שולה — לדוח היומי. מוגן במפתח REPORT_KEY."""
-    expected = os.environ.get("REPORT_KEY", "")
-    if not expected or key != expected:
+def usage(days: int = 1, key: str = "", x_report_key: str = Header("")):
+    """סיכום שימוש דרך שולה — לדוח השבועי. מוגן במפתח REPORT_KEY (עדיף בכותרת X-Report-Key)."""
+    if not _key_ok(x_report_key or key, "REPORT_KEY"):
         return PlainTextResponse("forbidden", status_code=403)
     return shula_agent.usage_report(max(1, min(days, 90)))
 
@@ -146,8 +152,7 @@ def google_auth_callback(code: str = "", state: str = "", error: str = ""):
 async def ask_shula(user_input: str, bot_name: str = "core_shula", sender: str = "api",
                     x_shula_key: str = Header("")):
     # לשולה יש גישה למייל וליומן — בלי מפתח סודי, אף אחד לא נכנס מכאן
-    expected = os.environ.get("ASK_KEY", "")
-    if not expected or x_shula_key != expected:
+    if not _key_ok(x_shula_key, "ASK_KEY"):
         return PlainTextResponse("forbidden", status_code=403)
     if bot_name not in shula_agent.manager.list_available_bots():
         return PlainTextResponse("unknown bot", status_code=404)

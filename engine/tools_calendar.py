@@ -141,7 +141,12 @@ def create_calendar_event(
 
 
 def delete_calendar_event(title_query: str, date_iso: str) -> str:
-    """מוחק אירוע ביומן. title_query = מילה מהכותרת, date_iso = התאריך YYYY-MM-DD. מוחק רק אם נמצא אירוע אחד בדיוק."""
+    """מוחק אירוע ביומן. title_query = מילה מהכותרת, date_iso = התאריך YYYY-MM-DD. מוחק רק אם נמצא אירוע אחד בדיוק.
+    חובה לקבל אישור מפורש מיוסי לפני המחיקה."""
+    import shula_agent
+    if not shula_agent.user_approved():
+        return ("עוד לא נמחק. קודם כתבי ליוסי איזה אירוע בדיוק (שם, תאריך ושעה) "
+                "ובקשי שיענה 'כן, מחקי'. רק אחרי התשובה שלו אפשר למחוק.")
     day = datetime.fromisoformat(date_iso).replace(tzinfo=TZ)
     res = _svc().events().list(
         calendarId=CALENDAR_ID, q=title_query, timeMin=day.isoformat(),
@@ -151,6 +156,7 @@ def delete_calendar_event(title_query: str, date_iso: str) -> str:
     if len(items) != 1:
         return f"נמצאו {len(items)} אירועים — צריך להיות בדיוק אחד. " + "\n".join(_fmt(e) for e in items)
     _svc().events().delete(calendarId=CALENDAR_ID, eventId=items[0]["id"]).execute()
+    shula_agent.consume_approval()
     return f"נמחק: {_fmt(items[0])}"
 
 
