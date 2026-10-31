@@ -15,7 +15,7 @@ class _Gmail:
 
 def _setup(monkeypatch, message):
     _Gmail.sent.clear()
-    monkeypatch.setattr(tools_gmail, "_gmail", lambda: _Gmail())
+    monkeypatch.setattr(tools_gmail, "_gmail", lambda *a: _Gmail())
     shula_agent._turn.message = message
 
 

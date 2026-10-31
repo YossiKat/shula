@@ -1,4 +1,4 @@
-"""כלי גוגל דרייב לשולה — חיפוש וקריאת קבצים (דרך חשבון גוגל של יוסי)."""
+"""כלי גוגל דרייב לשולה — חיפוש וקריאת קבצים בשני החשבונות של יוסי (Gmail ו-AnyCan)."""
 import io
 
 import google_auth
@@ -10,35 +10,41 @@ EXPORT = {
 }
 
 
-def _drive():
-    return google_auth.service("drive", "v3")
+def _drive(account: str = google_auth.MAIN):
+    return google_auth.service("drive", "v3", account)
 
 
-def search_drive(query: str, max_results: int = 10) -> str:
-    """מחפש קבצים בדרייב של יוסי לפי מילים מהשם או מהתוכן. מחזיר שם, סוג, תאריך עדכון, מזהה (id) וקישור."""
+def search_drive(query: str, max_results: int = 10, account: str = "all") -> str:
+    """מחפש קבצים בדרייב של יוסי לפי מילים מהשם או מהתוכן.
+    account: 'all' = בשני החשבונות (ברירת מחדל), 'gmail' = yossi.kat@gmail.com, 'anycan' = Yossi@anycan.ai.
+    מחזיר שם, סוג, תאריך עדכון, מזהה (id) וקישור."""
     q = f"fullText contains '{query.replace(chr(39), ' ')}' and trashed = false"
-    res = _drive().files().list(
-        q=q, pageSize=min(max_results, 20), orderBy="modifiedTime desc",
-        fields="files(id,name,mimeType,modifiedTime,webViewLink)",
-    ).execute()
-    files = res.get("files", [])
-    if not files:
-        return "לא נמצאו קבצים."
-    return "\n".join(
-        f"[{f['id']}] {f['name']} ({f['mimeType'].split('/')[-1].replace('vnd.google-apps.', '')}, {f['modifiedTime'][:10]}) {f.get('webViewLink', '')}"
-        for f in files
-    )
+    accounts = google_auth.pick(account)
+    lines = []
+    for acct in accounts:
+        res = _drive(acct).files().list(
+            q=q, pageSize=min(max_results, 20), orderBy="modifiedTime desc",
+            fields="files(id,name,mimeType,modifiedTime,webViewLink)",
+        ).execute()
+        tag = f"({google_auth.label(acct)}) " if len(accounts) > 1 else ""
+        lines += [
+            f"[{google_auth.tag_id(acct, f['id'])}] {tag}{f['name']} ({f['mimeType'].split('/')[-1].replace('vnd.google-apps.', '')}, {f['modifiedTime'][:10]}) {f.get('webViewLink', '')}"
+            for f in res.get("files", [])
+        ]
+    return "\n".join(lines) if lines else "לא נמצאו קבצים."
 
 
 def read_drive_file(file_id: str) -> str:
-    """קורא את תוכן הקובץ (Google Docs / Sheets / Slides / טקסט) לפי המזהה (id) מ-search_drive."""
+    """קורא את תוכן הקובץ (Google Docs / Sheets / Slides / טקסט) לפי המזהה (id) מ-search_drive (כולל הקידומת anycan: אם יש)."""
     from googleapiclient.http import MediaIoBaseDownload
-    meta = _drive().files().get(fileId=file_id, fields="name,mimeType").execute()
+    acct, file_id = google_auth.split_id(file_id)
+    drive = _drive(acct)
+    meta = drive.files().get(fileId=file_id, fields="name,mimeType").execute()
     mime = meta["mimeType"]
     if mime in EXPORT:
-        req = _drive().files().export_media(fileId=file_id, mimeType=EXPORT[mime])
+        req = drive.files().export_media(fileId=file_id, mimeType=EXPORT[mime])
     elif mime.startswith("text/") or mime in ("application/json",):
-        req = _drive().files().get_media(fileId=file_id)
+        req = drive.files().get_media(fileId=file_id)
     else:
         return f"הקובץ '{meta['name']}' הוא מסוג {mime} — אני יודעת לקרוא רק מסמכים, גיליונות, מצגות וטקסט."
     buf = io.BytesIO()

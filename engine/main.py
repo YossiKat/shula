@@ -89,6 +89,7 @@ def root():
         "model": shula_agent.GEMINI_MODEL,
         "async_mode": ASYNC_MODE,
         "google": google_auth.is_connected(),
+        "google_accounts": google_auth.connected_accounts(),
         "social": bool(os.environ.get("METRICOOL_TOKEN")),
     }
 
@@ -114,11 +115,14 @@ a.btn{{display:inline-block;background:#1a73e8;color:#fff;padding:12px 20px;bord
 
 
 @app.get("/google/auth")
-def google_auth_start():
+def google_auth_start(account: str = "gmail"):
     if not (os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET")):
         return _page("חסר מפתח", "<p>עדיין לא הוגדרו GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET ב-Render.</p>")
-    url = google_auth.auth_url(f"{PUBLIC_URL}/google/callback")
-    return _page("חיבור שולה לחשבון גוגל", f'<p>לחץ על הכפתור, בחר את החשבון <b>yossi.kat@gmail.com</b> ואשר.</p><p><a class="btn" href="{url}">התחבר עם גוגל</a></p>')
+    if account not in google_auth.ACCOUNTS:
+        return _page("חשבון לא מוכר", f"<p>אפשר: {', '.join(google_auth.ACCOUNTS)}</p>")
+    email = google_auth.ACCOUNTS[account]["email"]
+    url = google_auth.auth_url(f"{PUBLIC_URL}/google/callback", account)
+    return _page("חיבור שולה לחשבון גוגל", f'<p>לחץ על הכפתור, בחר את החשבון <b>{escape(email)}</b> ואשר.</p><p><a class="btn" href="{url}">התחבר עם גוגל</a></p>')
 
 
 @app.get("/google/callback")
@@ -126,14 +130,14 @@ def google_auth_callback(code: str = "", state: str = "", error: str = ""):
     if error or not code:
         return _page("לא אושר", f"<p>גוגל החזיר: {escape(error or 'אין קוד')}. <a href='/google/auth'>נסה שוב</a></p>")
     try:
-        token = google_auth.exchange_code(f"{PUBLIC_URL}/google/callback", code, state)
+        token, account = google_auth.exchange_code(f"{PUBLIC_URL}/google/callback", code, state)
     except Exception as e:
         return _page("שגיאה", f"<p>{escape(str(e)[:300])}</p><p><a href='/google/auth'>נסה שוב</a></p>")
     return _page("כמעט סיימנו ✅", f"""
 <p>גוגל אישר. עכשיו צעד אחרון: העתק את הקוד הזה (לחץ עליו כדי להעתיק):</p>
 <code id="t" onclick="navigator.clipboard.writeText(this.textContent).then(()=>{{document.getElementById('m').textContent='הועתק ✅'}})">{escape(token)}</code>
 <p id="m"></p>
-<p>והדבק אותו ב-Render כמשתנה סביבה בשם <b>GOOGLE_REFRESH_TOKEN</b>, ואז Save Changes.</p>
+<p>והדבק אותו ב-Render כמשתנה סביבה בשם <b>{google_auth.ACCOUNTS[account]['env']}</b>, ואז Save Changes.</p>
 <p><a class="btn" href="https://dashboard.render.com/web/srv-db8a9me89jmc73cqfca0/env">פתח את Render</a></p>
 """)
 

@@ -43,6 +43,35 @@ def _svc():
     return _service
 
 
+def _extra_calendars():
+    """יומנים לקריאה בלבד מהחשבון הנוסף (Yossi@anycan.ai) — מוצגים יחד עם היומן הראשי. אירועים חדשים נכנסים רק ל"יוסי קט"."""
+    import google_auth
+    out = []
+    for acct in google_auth.connected_accounts():
+        if acct != google_auth.MAIN:
+            out.append((google_auth.service("calendar", "v3", acct), "primary", google_auth.label(acct)))
+    return out
+
+
+def _list_all(**kwargs) -> list[dict]:
+    """אירועים מהיומן הראשי ומהיומנים הנוספים, ממוינים לפי שעה. אירוע מיומן נוסף מסומן בשם החשבון."""
+    items = _svc().events().list(calendarId=CALENDAR_ID, **kwargs).execute().get("items", [])
+    try:
+        extra = _extra_calendars()
+    except Exception:
+        extra = []
+    for svc, cal_id, lbl in extra:
+        try:
+            for ev in svc.events().list(calendarId=cal_id, **kwargs).execute().get("items", []):
+                ev["_account"] = lbl
+                items.append(ev)
+        except Exception:
+            continue
+    if extra:
+        items.sort(key=lambda e: e.get("start", {}).get("dateTime") or e.get("start", {}).get("date", ""))
+    return items
+
+
 def _fmt(ev: dict) -> str:
     start = ev.get("start", {})
     when = start.get("dateTime") or start.get("date", "")
@@ -51,7 +80,8 @@ def _fmt(ev: dict) -> str:
         when = dt.strftime("%a %d/%m %H:%M")
     color = COLOR_NAMES.get(ev.get("colorId", ""), "")
     loc = f" @ {ev['location']}" if ev.get("location") else ""
-    return f"{when} — {ev.get('summary', '(ללא כותרת)')}{loc} {color}".strip()
+    acct = f" ({ev['_account']})" if ev.get("_account") else ""
+    return f"{when} — {ev.get('summary', '(ללא כותרת)')}{loc} {color}{acct}".strip()
 
 
 def get_calendar_events(days_ahead: int = 1, days_back: int = 0) -> str:
@@ -59,11 +89,8 @@ def get_calendar_events(days_ahead: int = 1, days_back: int = 0) -> str:
     now = datetime.now(TZ)
     t_min = (now - timedelta(days=days_back)).replace(hour=0, minute=0, second=0)
     t_max = (now + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0)
-    res = _svc().events().list(
-        calendarId=CALENDAR_ID, timeMin=t_min.isoformat(), timeMax=t_max.isoformat(),
-        singleEvents=True, orderBy="startTime", maxResults=50,
-    ).execute()
-    items = res.get("items", [])
+    items = _list_all(timeMin=t_min.isoformat(), timeMax=t_max.isoformat(),
+                      singleEvents=True, orderBy="startTime", maxResults=50)
     if not items:
         return "אין אירועים בטווח הזה."
     return "\n".join(_fmt(e) for e in items)
@@ -72,23 +99,16 @@ def get_calendar_events(days_ahead: int = 1, days_back: int = 0) -> str:
 def get_events_for_date(date_iso: str) -> str:
     """מחזיר את כל האירועים ביומן של יוסי בתאריך מסוים. date_iso בפורמט YYYY-MM-DD. זה הכלי הנכון לשאלות כמו 'מה יש לי מחר' או 'מה יש ביום חמישי'."""
     day = datetime.fromisoformat(date_iso).replace(tzinfo=TZ, hour=0, minute=0, second=0)
-    res = _svc().events().list(
-        calendarId=CALENDAR_ID, timeMin=day.isoformat(), timeMax=(day + timedelta(days=1)).isoformat(),
-        singleEvents=True, orderBy="startTime", maxResults=50,
-    ).execute()
-    items = res.get("items", [])
+    items = _list_all(timeMin=day.isoformat(), timeMax=(day + timedelta(days=1)).isoformat(),
+                      singleEvents=True, orderBy="startTime", maxResults=50)
     return "\n".join(_fmt(e) for e in items) if items else f"אין אירועים ב-{day.strftime('%d/%m')}."
 
 
 def search_calendar_events(query: str, days_ahead: int = 30) -> str:
     """מחפש אירועים ביומן לפי מילה (למשל 'אופניים', 'זום', שם של אדם) בטווח של days_ahead ימים קדימה."""
     now = datetime.now(TZ)
-    res = _svc().events().list(
-        calendarId=CALENDAR_ID, q=query, timeMin=now.isoformat(),
-        timeMax=(now + timedelta(days=days_ahead)).isoformat(),
-        singleEvents=True, orderBy="startTime", maxResults=30,
-    ).execute()
-    items = res.get("items", [])
+    items = _list_all(q=query, timeMin=now.isoformat(), timeMax=(now + timedelta(days=days_ahead)).isoformat(),
+                      singleEvents=True, orderBy="startTime", maxResults=30)
     return "\n".join(_fmt(e) for e in items) if items else f"לא מצאתי אירועים עם '{query}'."
 
 
