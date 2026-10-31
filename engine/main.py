@@ -37,7 +37,9 @@ ALLOWED_SENDERS = {
 def _from_twilio(request: Request, form: dict, signature: str) -> bool:
     """בודק שההודעה באמת הגיעה מ-Twilio (חתימה עם ה-Auth Token), ולא ממישהו שמתחזה."""
     if not TWILIO_TOKEN:
-        return True  # בלי טוקן אין איך לבדוק — מסתמכים על רשימת המספרים
+        # בלי הטוקן אי אפשר לוודא שההודעה באמת מ-Twilio, ומספר שולח קל לזייף — לכן חוסמים.
+        log.error("TWILIO_AUTH_TOKEN missing — refusing /whatsapp (set it in Render)")
+        return False
     from twilio.request_validator import RequestValidator
     url = f"{PUBLIC_URL}{request.url.path}"
     if request.url.query:

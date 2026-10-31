@@ -116,6 +116,7 @@ def test_voice_note_is_transcribed(monkeypatch):
 
 def test_whatsapp_photo_reaches_shula_and_shows_typing(monkeypatch):
     monkeypatch.setattr(main, "TWILIO_TOKEN", None)
+    monkeypatch.setattr(main, "_from_twilio", lambda *a: True)  # בבדיקות אין Twilio אמיתי
     monkeypatch.setattr(main, "ALLOWED_SENDERS", {"whatsapp:+972500000000"})
     typed, got = [], {}
     monkeypatch.setattr(main.media, "show_typing", typed.append)
