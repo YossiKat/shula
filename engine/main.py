@@ -86,6 +86,27 @@ def _push_when_ready(sender: str, fut) -> None:
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://shula-x5mr.onrender.com")
 
 
+def _keep_awake_loop(interval: int = 600) -> None:
+    """Render בחינם נרדם אחרי 15 דקות בלי פניות, וההתעוררות לוקחת כחצי דקה — ואז יוסי מחכה.
+    התזמון של גיטהאב לא אמין (רץ כל כמה שעות), לכן שולה פונה לעצמה כל 10 דקות וכך לא נרדמת."""
+    import time
+    import requests
+    while True:
+        time.sleep(interval)
+        try:
+            requests.get(f"{PUBLIC_URL}/", timeout=30)
+        except Exception as e:
+            log.warning("self keep-awake ping failed: %s", str(e)[:120])
+
+
+@app.on_event("startup")
+def _start_keep_awake() -> None:
+    # רק בשרת האמיתי ב-Render (שם RENDER=true), לא בבדיקות; אפשר לכבות עם SHULA_SELF_PING=0
+    if os.environ.get("RENDER") and os.environ.get("SHULA_SELF_PING", "1") == "1":
+        threading.Thread(target=_keep_awake_loop, daemon=True).start()
+        log.info("keep-awake pinger started")
+
+
 @app.get("/")
 def root():
     return {

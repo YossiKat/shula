@@ -122,3 +122,22 @@ def test_without_twilio_token_nobody_gets_in(monkeypatch):
     c = TestClient(main.app)
     r = c.post("/whatsapp", data={"Body": "תקראי לי את המיילים", "From": "whatsapp:+972547599993"})
     assert r.status_code == 403
+
+
+def test_keep_awake_does_not_start_outside_render(monkeypatch):
+    started = []
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.setattr(main.threading, "Thread", lambda *a, **k: started.append(1))
+    main._start_keep_awake()
+    assert started == []
+
+
+def test_keep_awake_starts_on_render(monkeypatch):
+    class T:
+        def __init__(self, *a, **k): pass
+        def start(self): started.append(1)
+    started = []
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setattr(main.threading, "Thread", T)
+    main._start_keep_awake()
+    assert started == [1]
