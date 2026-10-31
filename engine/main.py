@@ -8,6 +8,7 @@ import os
 import threading
 
 import google_auth
+import media
 import shula_agent
 
 logging.basicConfig(level=logging.INFO)
@@ -170,6 +171,7 @@ async def whatsapp_webhook(
     Body: str = Form(""),
     From: str = Form(""),
     NumMedia: str = Form("0"),
+    MessageSid: str = Form(""),
     x_twilio_signature: str = Header(""),
 ):
     """Twilio WhatsApp Webhook"""
@@ -182,11 +184,18 @@ async def whatsapp_webhook(
         return PlainTextResponse('<?xml version="1.0" encoding="UTF-8"?><Response/>', media_type="application/xml")
 
     user_message = Body.strip()
-    if NumMedia not in ("", "0"):
-        user_message = (user_message + "\n[יוסי צירף קובץ/תמונה — עדיין אין לי יכולת לראות תמונות, בקשי ממנו לכתוב מה יש שם]").strip()
+    attached = []
+    try:
+        attached = [(form.get(f"MediaUrl{i}", ""), form.get(f"MediaContentType{i}", ""))
+                    for i in range(min(int(NumMedia or 0), 5))]
+    except ValueError:
+        pass
+    attached = [(u, t) for u, t in attached if u]
 
-    if not user_message:
+    if not user_message and not attached:
         return _twiml("היי, זו שולה 👋 כתוב לי מה צריך.")
+
+    media.show_typing(MessageSid)  # שלוש הנקודות: "שולה מקלידה..."
 
     if user_message.lower() in ("reset", "איפוס", "שכחי הכל"):
         shula_agent.forget(From)
@@ -210,11 +219,11 @@ async def whatsapp_webhook(
         if user_message in NUDGES:
             return _twiml(text)
         # הודעה חדשה אמיתית — נענה על הקודמת, והחדשה תטופל ברקע
-        _pending[From] = asyncio.ensure_future(asyncio.to_thread(shula_agent.reply, From, user_message))
+        _pending[From] = asyncio.ensure_future(asyncio.to_thread(_answer, From, user_message, attached))
         return _twiml(text + "\n\n(על ההודעה החדשה אענה בהודעה הבאה — שלח 'המשך')")
 
     # הודעה רגילה — מנסים לענות בתוך הדדליין
-    fut = asyncio.ensure_future(asyncio.to_thread(shula_agent.reply, From, user_message))
+    fut = asyncio.ensure_future(asyncio.to_thread(_answer, From, user_message, attached))
     text = await _collect(fut, SYNC_DEADLINE)
     if text is None:
         _pending[From] = fut
@@ -222,6 +231,19 @@ async def whatsapp_webhook(
             fut.add_done_callback(lambda f, s=From: _push_when_ready(s, f))
         return _twiml("רגע, בודקת… 🔎 שלח לי 'המשך' בעוד כמה שניות ואמסור את התשובה.")
     return _twiml(text)
+
+
+def _answer(sender: str, text: str, attached: list) -> str:
+    """מכין קבצים (תמלול הודעה קולית, תמונות, PDF) ואז מבקש תשובה משולה."""
+    notes = []
+    attachments = []
+    if attached:
+        text, attachments, notes = media.prepare(text, attached)
+    if not text and not attachments:
+        return "קיבלתי את הקובץ, אבל " + ("; ".join(notes) or "לא הצלחתי להבין אותו") + ". תכתוב לי מה צריך?"
+    answer = (shula_agent.reply(sender, text, attachments=attachments) if attachments
+              else shula_agent.reply(sender, text))
+    return answer + (f"\n\n({'; '.join(notes)})" if notes else "")
 
 
 async def _collect(fut: asyncio.Future, timeout: float):
