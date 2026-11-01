@@ -1,17 +1,17 @@
-# Graph Report - shula  (2026-10-31)
+# Graph Report - shula  (2026-11-01)
 
 ## Corpus Check
-- 25 files · ~7,478 words
+- 27 files · ~8,116 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 1 file(s) not represented in the graph (top: (none) 1)
 
 ## Summary
-- 339 nodes · 540 edges · 16 communities (15 shown, 1 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 36 edges (avg confidence: 0.85)
+- 355 nodes · 569 edges · 16 communities (15 shown, 1 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 40 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `925db5fb`
+- Built from commit: `372019ab`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -72,35 +72,35 @@ Cohesion: 0.07
 Nodes (34): AGENTS.md Agent Guidelines, Calendar capability, Calendar color codes, Capabilities list, Conversation memory, Core Shula system prompt, Drive capability, Gmail capability (+26 more)
 
 ### Community 1 - "Agent Brain & Memory"
-Cohesion: 0.08
-Nodes (21): _agenda(), _ensure_loaded(), forget(), _from_gemini_history(), _invalidate_agenda(), _learned_rules(), _log_usage(), reply() (+13 more)
+Cohesion: 0.06
+Nodes (22): BotManager, _agenda(), _ensure_loaded(), forget(), _from_gemini_history(), _invalidate_agenda(), _learned_rules(), _log_usage() (+14 more)
 
 ### Community 2 - "WhatsApp Webhook Server"
-Cohesion: 0.08
-Nodes (15): ask_shula(), _collect(), _from_twilio(), google_auth_callback(), google_auth_start(), _page(), _push_when_ready(), run() (+7 more)
+Cohesion: 0.09
+Nodes (14): exchange_code(), ask_shula(), _collect(), _from_twilio(), google_auth_callback(), google_auth_start(), _page(), _push_when_ready() (+6 more)
 
 ### Community 3 - "Gmail Tools & Email Gate"
 Cohesion: 0.09
 Nodes (17): split_id(), tag_id(), test_ids_from_the_second_account_carry_its_name(), _Gmail, _setup(), test_email_is_not_sent_without_yossis_ok(), test_email_is_sent_after_yossi_says_yes(), _body_text() (+9 more)
 
 ### Community 4 - "Google OAuth Connection"
-Cohesion: 0.12
-Nodes (18): _account(), auth_url(), connected_accounts(), credentials(), exchange_code(), _flow(), is_connected(), label() (+10 more)
+Cohesion: 0.10
+Nodes (18): _account(), auth_url(), connected_accounts(), credentials(), _flow(), is_connected(), label(), pick() (+10 more)
 
 ### Community 5 - "Calendar Tools & Tests"
-Cohesion: 0.12
+Cohesion: 0.11
 Nodes (12): _FakeService, test_events_for_date_asks_for_that_whole_day(), test_events_for_date_empty_day(), create_calendar_event(), delete_calendar_event(), _extra_calendars(), _fmt(), get_calendar_events() (+4 more)
 
 ### Community 6 - "tools_social.py"
-Cohesion: 0.12
-Nodes (6): BotManager, _headers(), list_scheduled_posts(), _norm_networks(), _params(), schedule_social_post()
+Cohesion: 0.13
+Nodes (14): _Resp, test_days_clamped(), fake_get(), test_forecast_home_7_days(), fake_get(), test_forecast_other_city_uses_geocoding(), fake_get(), _headers() (+6 more)
 
 ### Community 7 - "WhatsApp Tests"
-Cohesion: 0.16
-Nodes (8): client(), _send(), test_answer_is_xml_escaped(), test_empty_message_gets_greeting(), test_fast_answer_comes_back_directly(), test_reset_clears_memory(), test_slow_answer_is_delivered_on_nudge(), test_stranger_is_ignored()
+Cohesion: 0.14
+Nodes (9): client(), _send(), test_answer_is_xml_escaped(), test_empty_message_gets_greeting(), test_fast_answer_comes_back_directly(), test_push_blocked_keeps_answer_for_nudge(), test_reset_clears_memory(), test_slow_answer_is_delivered_on_nudge() (+1 more)
 
 ### Community 8 - "Weekly Conversation Log"
-Cohesion: 0.13
+Cohesion: 0.14
 Nodes (12): format_entry(), _get_label_id(), _gmail(), _insert(), is_correction(), log_exchange(), run(), test_correction_is_flagged_with_previous_answer() (+4 more)
 
 ### Community 9 - "CI Test Workflow"
@@ -135,22 +135,22 @@ Nodes (4): _connect_both(), _Mail, test_email_search_covers_both_accounts(), tes
 
 ## Knowledge Gaps
 - **6 isolated node(s):** `Conversation memory`, `Yossi Kat (user)`, `requests 2.32.3`, `Shulamit OS - Strategic Command Center`, `Supported Versions table` (+1 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 133 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 138 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `whatsapp_webhook()` connect `WhatsApp Webhook Server` to `Shula Persona & Rules`, `Agent Brain & Memory`?**
-  _High betweenness centrality (0.186) - this node is a cross-community bridge._
+  _High betweenness centrality (0.180) - this node is a cross-community bridge._
 - **What connects `Conversation memory`, `Yossi Kat (user)`, `requests 2.32.3` to the rest of the system?**
   _6 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Shula Persona & Rules` be split into smaller, more focused modules?**
   _Cohesion score 0.07435897435897436 - nodes in this community are weakly interconnected._
 - **Why does `twilio 9.3.7` connect `Shula Persona & Rules` to `WhatsApp Webhook Server`?**
-  _High betweenness centrality (0.167) - this node is a cross-community bridge._
+  _High betweenness centrality (0.162) - this node is a cross-community bridge._
 - **Should `Agent Brain & Memory` be split into smaller, more focused modules?**
-  _Cohesion score 0.07564102564102564 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05795918367346939 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._

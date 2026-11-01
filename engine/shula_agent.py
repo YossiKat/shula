@@ -1,5 +1,5 @@
 """
-המוח של שולה: Claude (או Gemini כגיבוי) + זיכרון שיחה לכל מספר + כלים (יומן, ג'ימייל, דרייב, רשתות).
+המוח של שולה: Claude (או Gemini כגיבוי) + זיכרון שיחה לכל מספר + כלים (יומן, ג'ימייל, דרייב, רשתות, מזג אוויר).
 """
 import functools
 import logging
@@ -23,6 +23,7 @@ from tools_drive import DRIVE_TOOLS
 from tools_gmail import GMAIL_TOOLS
 from tools_monday import MONDAY_TOOLS
 from tools_social import SOCIAL_TOOLS
+from tools_weather import WEATHER_TOOLS
 
 TZ = ZoneInfo("Asia/Jerusalem")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
@@ -88,7 +89,7 @@ def _facts_text() -> str:
 
 
 MEMORY_TOOLS = [remember_fact, forget_fact]
-TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + MEMORY_TOOLS]
+TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + MEMORY_TOOLS + WEATHER_TOOLS]
 
 # זיכרון: {sender: [{"role": "user"|"model", "text": "..."}]}
 _histories: dict[str, list] = defaultdict(list)
