@@ -30,14 +30,14 @@
     "semantic_hash": ""
   },
   "engine/google_auth.py": {
-    "mtime": 1793425533.3446934,
-    "seen": 1793425585.741131,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171093,
     "ast_hash": "0fbdac1344efd8d9df8002df3d918d48",
     "semantic_hash": ""
   },
   "engine/main.py": {
-    "mtime": 1793425559.8183734,
-    "seen": 1793425585.7411344,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171135,
     "ast_hash": "1f8912a1ebc42909236e1c41d8980803",
     "semantic_hash": ""
   },
@@ -48,9 +48,9 @@
     "semantic_hash": "d880c7346f3830c11f19f812e3da61c8"
   },
   "engine/shula_agent.py": {
-    "mtime": 1793179757.5681946,
-    "seen": 1793179822.6835258,
-    "ast_hash": "e2dd1e95fe5c42b97022cfa8de573b35",
+    "mtime": 1793522137.0845869,
+    "seen": 1793522150.4171193,
+    "ast_hash": "e3f42b62774666a17ad1ddb378e4063d",
     "semantic_hash": ""
   },
   "engine/tests/conftest.py": {
@@ -78,8 +78,8 @@
     "semantic_hash": ""
   },
   "engine/tests/test_email_gate.py": {
-    "mtime": 1793425559.8190787,
-    "seen": 1793425585.7411504,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171367,
     "ast_hash": "708767ca68f53001f88f616d81ef7ca8",
     "semantic_hash": ""
   },
@@ -90,20 +90,20 @@
     "semantic_hash": "ae228709595c30ec0d65df440f2b6649"
   },
   "engine/tools_calendar.py": {
-    "mtime": 1793425559.8178957,
-    "seen": 1793425585.7411537,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171455,
     "ast_hash": "a247b101cab72c06934018196db34460",
     "semantic_hash": ""
   },
   "engine/tools_drive.py": {
-    "mtime": 1793425533.345636,
-    "seen": 1793425585.7411559,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171479,
     "ast_hash": "059a74a4d202ee01bbebfc0fa585bb47",
     "semantic_hash": ""
   },
   "engine/tools_gmail.py": {
-    "mtime": 1793425533.3453386,
-    "seen": 1793425585.7411575,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171505,
     "ast_hash": "36fb72812ad535c04dabc525b1a1af6e",
     "semantic_hash": ""
   },
@@ -138,9 +138,9 @@
     "semantic_hash": "b1060e70aaff0e2baed6fc1d91ebe9b3"
   },
   "engine/bots/core_shula.txt": {
-    "mtime": 1793425559.818737,
-    "seen": 1793425585.7412639,
-    "ast_hash": "97953f29fd347c8a0b5e5db261150df9",
+    "mtime": 1793522137.0850124,
+    "seen": 1793522150.4171722,
+    "ast_hash": "53b0ebb147bbbce75c68afc12414b07a",
     "semantic_hash": ""
   },
   "engine/requirements.txt": {
@@ -162,9 +162,21 @@
     "semantic_hash": ""
   },
   "engine/tests/test_accounts.py": {
-    "mtime": 1793425572.4421902,
-    "seen": 1793425585.741143,
+    "mtime": 1793425670.2821958,
+    "seen": 1793522150.4171262,
     "ast_hash": "9943d3da37976f984888e73f9ec8d86b",
+    "semantic_hash": ""
+  },
+  "engine/tests/test_weather.py": {
+    "mtime": 1793522137.0952473,
+    "seen": 1793522150.4171398,
+    "ast_hash": "af70e56f81d87c68b0970d3444eac3ba",
+    "semantic_hash": ""
+  },
+  "engine/tools_weather.py": {
+    "mtime": 1793522123.7124853,
+    "seen": 1793522150.417155,
+    "ast_hash": "39f795a20e009c34d83da828e53074a7",
     "semantic_hash": ""
   }
 }
