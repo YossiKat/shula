@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, Header, Request
-from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, Response
 from html import escape
 import asyncio
 import hmac
@@ -10,6 +10,7 @@ import threading
 import google_auth
 import media
 import shula_agent
+import voice
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("shula")
@@ -48,7 +49,10 @@ def _from_twilio(request: Request, form: dict, signature: str) -> bool:
 
 
 def _twiml(text: str) -> PlainTextResponse:
-    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n    <Message>{escape(text)}</Message>\n</Response>'
+    # תשובה עם הקלטה: קודם הטקסט, ואחריו הודעה נפרדת עם הקול
+    audio_url = getattr(text, "audio_url", None)
+    clip = f'\n    <Message><Media>{escape(audio_url)}</Media></Message>' if audio_url else ""
+    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n    <Message>{escape(text)}</Message>{clip}\n</Response>'
     return PlainTextResponse(content=xml, media_type="application/xml")
 
 
@@ -64,6 +68,9 @@ def _send_whatsapp(to: str, text: str) -> None:
     chunks = [text[i:i + 1500] for i in range(0, len(text), 1500)] or [text]
     for chunk in chunks:
         client.messages.create(from_=TWILIO_FROM, to=to, body=chunk)
+    audio_url = getattr(text, "audio_url", None)
+    if audio_url:
+        client.messages.create(from_=TWILIO_FROM, to=to, media_url=[audio_url])
 
 
 _push_blocked = False  # נדלק אם Twilio חוסם שליחה יזומה (KYC לא אושר)
@@ -128,6 +135,15 @@ def _key_ok(given: str, env_name: str) -> bool:
     """השוואת מפתח סודי בזמן קבוע (כדי שאי אפשר יהיה לנחש אותו אות אחרי אות)."""
     expected = os.environ.get(env_name, "")
     return bool(expected) and hmac.compare_digest((given or "").encode(), expected.encode())
+
+
+@app.get("/voice/{token}.mp3")
+def voice_clip(token: str):
+    """מכאן Twilio מוריד את ההקלטה של שולה. הכתובת אקראית ותקפה לשעה."""
+    audio = voice.get_clip(token)
+    if audio is None:
+        return PlainTextResponse("not found", status_code=404)
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 @app.get("/usage")
@@ -277,7 +293,14 @@ def _answer(sender: str, text: str, attached: list) -> str:
         return "קיבלתי את הקובץ, אבל " + ("; ".join(notes) or "לא הצלחתי להבין אותו") + ". תכתוב לי מה צריך?"
     answer = (shula_agent.reply(sender, text, attachments=attachments) if attachments
               else shula_agent.reply(sender, text))
-    return answer + (f"\n\n({'; '.join(notes)})" if notes else "")
+    full = answer + (f"\n\n({'; '.join(notes)})" if notes else "")
+    # יוסי דיבר? שולה עונה גם בקול (רק את התשובה עצמה, בלי ההערות הטכניות)
+    if any((t or "").startswith("audio/") for _, t in attached):
+        spoken = voice.speak(answer, PUBLIC_URL)
+        out = voice.VoiceAnswer(full)
+        out.audio_url = spoken.audio_url
+        return out
+    return full
 
 
 async def _collect(fut: asyncio.Future, timeout: float):
