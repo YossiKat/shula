@@ -12,5 +12,7 @@ services:
         sync: false
       - key: MONDAY_API_TOKEN
         sync: false
+      - key: MONDAY_ANYCAN_API_TOKEN
+        sync: false
       - key: ELEVENLABS_API_KEY
         sync: false

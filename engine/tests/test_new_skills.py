@@ -106,6 +106,68 @@ def test_monday_without_token_explains():
     assert "MONDAY_API_TOKEN" in out
 
 
+def test_anycan_monday_uses_its_own_token_and_finds_board_by_name(monkeypatch):
+    monkeypatch.setenv("MONDAY_API_TOKEN", "ao")
+    monkeypatch.setenv("MONDAY_ANYCAN_API_TOKEN", "anycan")
+    seen = []
+
+    def post(url, json, headers, timeout):
+        seen.append(headers["Authorization"])
+        if "items_page" in json["query"]:
+            assert json["variables"]["ids"] == ["77"]
+            data = {"boards": [{"name": "AnyCan Ai", "items_page": {"items": [
+                {"id": "1", "name": "Mayo Clinic", "updated_at": "2026-11-10T10:00:00Z",
+                 "group": {"title": "University / Hospital"}, "column_values": []},
+                {"id": "2", "name": "ספק אריזות", "updated_at": "2026-11-09T10:00:00Z",
+                 "group": {"title": "Suppliers"}, "column_values": []}]}}]}
+        else:
+            data = {"boards": [{"id": "77", "name": "AnyCan Ai", "type": "board"},
+                               {"id": "78", "name": "AnyCan - Inventory", "type": "board"}]}
+        return NS(raise_for_status=lambda: None, json=lambda: {"data": data})
+
+    monkeypatch.setattr(tools_monday.requests, "post", post)
+    out = tools_monday.get_anycan_monday_items("mayo")
+    assert "Mayo Clinic" in out and "ספק אריזות" not in out
+    assert set(seen) == {"anycan"}
+    assert "Inventory" in tools_monday.get_anycan_monday_items(board="list")
+
+
+def test_anycan_monday_without_token_names_the_missing_key(monkeypatch):
+    monkeypatch.setenv("MONDAY_API_TOKEN", "ao")
+    monkeypatch.delenv("MONDAY_ANYCAN_API_TOKEN", raising=False)
+    out = [t for t in shula_agent.TOOLS if t.__name__ == "get_monday_updates"][0]()
+    assert "MONDAY_ANYCAN_API_TOKEN" in out
+
+
+def test_monday_updates_show_who_wrote_what(monkeypatch):
+    monkeypatch.setenv("MONDAY_ANYCAN_API_TOKEN", "anycan")
+    data = {"data": {"updates": [
+        {"id": "1", "text_body": "דיברתי עם  המרפאה,\nמחכים לתשובה", "created_at": "2026-11-11T08:00:00Z",
+         "creator": {"name": "Yossi Kat"}, "item": {"name": "Mayo Clinic", "board": {"name": "AnyCan Ai"}},
+         "replies": [{"text_body": "מעולה", "creator": {"name": "Dana"}}]},
+        {"id": "2", "text_body": "הזמנה יצאה", "created_at": "2026-11-10T08:00:00Z",
+         "creator": None, "item": None, "replies": []}]}}
+    monkeypatch.setattr(tools_monday.requests, "post",
+                        lambda *a, **k: NS(raise_for_status=lambda: None, json=lambda: data))
+    out = tools_monday.get_monday_updates()
+    assert "2026-11-11 | Yossi Kat | Mayo Clinic (לוח AnyCan Ai): דיברתי עם המרפאה, מחכים לתשובה" in out
+    assert "↳ Dana: מעולה" in out and "פריט שנמחק" in out
+    assert "הזמנה" not in tools_monday.get_monday_updates(search="mayo")
+
+
+# ---------- יומן הפעולות של Claude ----------
+def test_claude_action_log_is_read_newest_first(monkeypatch):
+    import tools_claude_log
+    csv_text = ("תאריך,שעה,איפה,מה נעשה,פרטים\n"
+                "10.11.2026,09:00,מנדיי AnyCan,נוספו 12 מרפאות,בקבוצת University\n"
+                "11.11.2026,21:30,יומן,נקבעה פגישה,\n")
+    monkeypatch.setattr(tools_claude_log, "_rows", lambda: [r.split(",") for r in csv_text.strip().split("\n")])
+    out = tools_claude_log.get_claude_actions()
+    assert "<claude_log_data>" in out and out.index("נקבעה פגישה") < out.index("נוספו 12 מרפאות")
+    assert "נקבעה פגישה" not in tools_claude_log.get_claude_actions("מנדיי")
+    assert "get_claude_actions" in [t.__name__ for t in shula_agent.TOOLS]
+
+
 # ---------- הודעות קוליות ותמונות בוואטסאפ ----------
 def test_voice_note_is_transcribed(monkeypatch):
     monkeypatch.setattr(media, "download", lambda url: (b"ogg", "audio/ogg"))
