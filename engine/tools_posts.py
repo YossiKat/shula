@@ -96,27 +96,30 @@ def _sheet_rows() -> list[dict]:
     return out
 
 
-def _existing_links(board_id: str, group_id: str, link_col: str) -> set:
-    """הקישורים שכבר רשומים בקבוצת 'פוסטים ושיתופים' — כדי לא לרשום שיתוף פעמיים."""
-    q = ("query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 500) { cursor items { "
-         "column_values(ids: [\"%s\"]) { text } } } } } }" % link_col)
+PENDING = " (ממתין לאישור מנהל)"
+
+
+def _existing_posts(board_id: str, group_id: str) -> dict:
+    """{שם הפוסט: {"id": ..., "subs": שמות תת-השורות שכבר רשומות}} בקבוצת 'פוסטים ושיתופים'."""
+    fields = "id name subitems { name }"
+    q = "query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 100) { cursor items { %s } } } } }" % fields
     page = tools_monday._query(q, {"b": [board_id], "g": [group_id]}, "anycan")["boards"][0]["groups"][0]["items_page"]
-    seen = set()
+    out = {}
     while True:
         for it in page["items"]:
-            seen.update(c["text"] for c in it["column_values"] if c.get("text"))
+            out[it["name"]] = {"id": it["id"], "subs": {sub["name"].replace(PENDING, "") for sub in it.get("subitems") or []}}
         if not page.get("cursor"):
-            return seen
-        page = tools_monday._query(
-            "query ($c: String!) { next_items_page(cursor: $c, limit: 500) { cursor items { column_values(ids: [\"%s\"]) { text } } } }" % link_col,
-            {"c": page["cursor"]}, "anycan")["next_items_page"]
+            return out
+        page = tools_monday._query("query ($c: String!) { next_items_page(cursor: $c, limit: 100) { cursor items { %s } } }" % fields,
+                                   {"c": page["cursor"]}, "anycan")["next_items_page"]
 
 
 def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
-    """מכניסה ל-monday של AnyCan (קבוצת 'פוסטים ושיתופים') את השיתופים של יוסי לקבוצות פייסבוק, שורה לכל שיתוף,
-    מתוך הגיליון 'שיתופים בפייסבוק' שבדרייב. שיתוף שכבר רשום לא נרשם שוב. עד 60 בכל פעם — אם נשארו, לבקש שוב.
-    השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי' או 'המשך ייבוא'. רץ לבד כל בוקר."""
-    need = ["📅 shared at", "👥 shared to", "🔗 post link"]
+    """מכניסה ל-monday של AnyCan (קבוצת 'פוסטים ושיתופים') את השיתופים של יוסי לקבוצות פייסבוק מתוך הגיליון 'שיתופים בפייסבוק'
+    שבדרייב: שורה אחת לכל פוסט, ומתחתיה תת-שורה לכל קבוצה שהפוסט שותף אליה. שיתוף שכבר רשום לא נרשם שוב.
+    עד 60 שיתופים בכל פעם — אם נשארו, לבקש שוב. השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי' או 'המשך ייבוא'.
+    רץ לבד כל בוקר."""
+    need = ["📅 shared at", "👥 shared to"]
     for attempt in range(2):
         board = _board()
         group = next((g for g in board["groups"] if g["title"].strip() == GROUP), None)
@@ -128,24 +131,44 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
     else:
         return "לא הצלחתי להכין את הקבוצה והעמודות בלוח AnyCan Ai."
     rows = _sheet_rows()
-    seen = _existing_links(board["id"], group["id"], cols["🔗 post link"])
-    todo = [r for r in rows if r["link"] not in seen]
-    done = 0
-    for r in todo[:max(1, min(int(limit), 200))]:
-        values = {cols["👥 shared to"]: r["group"][:250], cols["🔗 post link"]: r["link"]}
+    posts = _existing_posts(board["id"], group["id"])
+    budget = max(1, min(int(limit), 200))
+    done = left = 0
+    touched = set()
+    for r in reversed(rows):  # מהישן לחדש
+        post = f"פייסבוק · {r['post'] or 'פוסט'}"[:250]
+        sub = f"{r['date']} {r['time']} · {r['group']}"[:230]
+        if post in posts and sub in posts[post]["subs"]:
+            continue
+        if done >= budget:
+            left += 1
+            continue
+        if post not in posts:
+            item = tools_monday._query(
+                "mutation ($b: ID!, $g: String!, $n: String!) { create_item(board_id: $b, group_id: $g, item_name: $n) { id } }",
+                {"b": board["id"], "g": group["id"], "n": post}, "anycan")["create_item"]
+            posts[post] = {"id": item["id"], "subs": set()}
+        tools_monday._query(
+            "mutation ($p: ID!, $n: String!) { create_subitem(parent_item_id: $p, item_name: $n) { id } }",
+            {"p": posts[post]["id"], "n": sub + (PENDING if r["pending"] else "")}, "anycan")
+        posts[post]["subs"].add(sub)
+        touched.add(post)
+        done += 1
+    for post in touched:  # סיכום על שורת הפוסט: כמה קבוצות, כמה ממתינים, מתי שותף לאחרונה
+        mine = [r for r in rows if f"פייסבוק · {r['post'] or 'פוסט'}"[:250] == post]
+        waiting = sum(r["pending"] for r in mine)
+        values = {cols["👥 shared to"]: f"{len(mine)} שיתופים ל-{len({r['group'] for r in mine})} קבוצות"
+                                        + (f", {waiting} ממתינים לאישור" if waiting else "")}
         try:
-            datetime.strptime(r["date"], "%Y-%m-%d")
-            values[cols["📅 shared at"]] = {"date": r["date"]}
+            last = max(r["date"] for r in mine)
+            datetime.strptime(last, "%Y-%m-%d")
+            values[cols["📅 shared at"]] = {"date": last}
         except ValueError:
             pass
-        name = f"פייסבוק · {r['post'] or 'פוסט'} · {r['group']}" + (" (ממתין לאישור מנהל)" if r["pending"] else "")
         tools_monday._query(
-            "mutation ($b: ID!, $g: String!, $n: String!, $v: JSON) { create_item(board_id: $b, group_id: $g, item_name: $n, column_values: $v) { id } }",
-            {"b": board["id"], "g": group["id"], "n": name[:250], "v": json.dumps(values, ensure_ascii=False)}, "anycan")
-        seen.add(r["link"])
-        done += 1
-    left = len(todo) - done
-    return (f"נרשמו ב-monday {done} שיתופים מפייסבוק (מתוך {len(rows)} בגיליון)."
+            "mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }",
+            {"b": board["id"], "i": posts[post]["id"], "v": json.dumps(values, ensure_ascii=False)}, "anycan")
+    return (f"נרשמו ב-monday {done} שיתופים מפייסבוק תחת {len(touched)} פוסטים (מתוך {len(rows)} שיתופים בגיליון)."
             + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן."))
 
 
