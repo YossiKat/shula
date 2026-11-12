@@ -240,6 +240,11 @@ def daily_loop(check_every: int = 600) -> None:
         if last_hour != (now.date(), now.hour):
             last_hour = (now.date(), now.hour)
             _import_shares()
+            try:
+                import tools_hub
+                log.info("content hub sync: %s", tools_hub.sync_content_hub())
+            except Exception:
+                log.exception("content hub sync failed")
 
 
 SYNC_TOOLS = [sync_monday_and_calendar]
