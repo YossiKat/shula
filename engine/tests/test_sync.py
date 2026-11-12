@@ -84,7 +84,7 @@ def test_monday_dates_enter_the_calendar_once(monkeypatch):
     out = tools_sync.sync_monday_and_calendar()
     assert "1 חדשים" in out and cal.calls == [("insert", "📋 Mayo Clinic · Follow up")]
     ev = next(iter(cal.store.values()))
-    assert ev["start"] == {"date": SOON} and "boards/77/pulses/1" in ev["description"]
+    assert ev["start"] == {"date": SOON} and "boards/77/pulses/1" in ev["description"] and ev["colorId"] == "2"
     cal.calls.clear()
     assert "0 חדשים, 0 עודכנו, 0 הוסרו" in tools_sync.sync_monday_and_calendar()
     assert cal.calls == []
