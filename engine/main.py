@@ -117,6 +117,10 @@ def _start_keep_awake() -> None:
     if os.environ.get("RENDER") and os.environ.get("SHULA_SELF_PING", "1") == "1":
         threading.Thread(target=_keep_awake_loop, daemon=True).start()
         log.info("keep-awake pinger started")
+    if os.environ.get("RENDER") and os.environ.get("MONDAY_ANYCAN_API_TOKEN") and os.environ.get("SHULA_MONDAY_SYNC", "1") == "1":
+        import tools_sync
+        threading.Thread(target=tools_sync.daily_loop, daemon=True).start()
+        log.info("daily monday-calendar sync started")
 
 
 @app.get("/")
