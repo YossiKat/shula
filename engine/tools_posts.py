@@ -62,8 +62,6 @@ def move_posts_tracking() -> str:
     setup_posts_tracking()  # קבוצה ועמודות בלוח החדש
     new = _board()
     new_group = next(g for g in new["groups"] if g["title"].strip() == GROUP)
-    by_title = {c["title"].strip().lower(): c["id"] for c in new["columns"]}
-    mapping = [{"source": c["id"], "target": by_title.get(c["title"].strip().lower())} for c in old["columns"]]
     ids = []
     page = tools_monday._query(
         "query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 100) { cursor items { id } } } } }",
@@ -75,10 +73,11 @@ def move_posts_tracking() -> str:
         page = tools_monday._query("query ($c: String!) { next_items_page(cursor: $c, limit: 100) { cursor items { id } } }",
                                    {"c": page["cursor"]}, "anycan")["next_items_page"]
     for item_id in ids:
+        # בלי מפת עמודות: monday מתאים לבד לפי שם וסוג (העמודות שלנו זהות בשני הלוחות).
+        # מפה ידנית חייבת לכלול כל עמודה בלוח המקור, ועמודות נוסחה אי אפשר למפות — ולכן נכשלה.
         tools_monday._query(
-            "mutation ($b: ID!, $g: ID!, $i: ID!, $m: [ColumnMappingInput!]) "
-            "{ move_item_to_board(board_id: $b, group_id: $g, item_id: $i, columns_mapping: $m) { id } }",
-            {"b": new["id"], "g": new_group["id"], "i": item_id, "m": mapping}, "anycan")
+            "mutation ($b: ID!, $g: ID!, $i: ID!) { move_item_to_board(board_id: $b, group_id: $g, item_id: $i) { id } }",
+            {"b": new["id"], "g": new_group["id"], "i": item_id}, "anycan")
     tools_monday._query("mutation ($b: ID!, $g: String!) { archive_group(board_id: $b, group_id: $g) { id } }",
                         {"b": old["id"], "g": old_group["id"]}, "anycan")
     _moved = True

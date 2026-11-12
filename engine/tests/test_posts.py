@@ -193,7 +193,7 @@ def test_tracking_moves_once_from_anycan_ai_to_the_supermetrics_board(monkeypatc
     out = tools_posts.move_posts_tracking()
     assert [c[0] for c in calls] == ["move_item_to_board", "move_item_to_board", "archive_group"]
     assert calls[0][1]["b"] == "88" and calls[0][1]["g"] == "gnew"
-    assert {"source": "v1", "target": "v2"} in calls[0][1]["m"] and {"source": "st", "target": None} in calls[0][1]["m"]
+    assert "m" not in calls[0][1] and calls[0][1]["i"] == "1"
     assert calls[2][1] == {"b": "77", "g": "gold"} and "הועברו 2 פוסטים" in out
     calls.clear()
     assert "כבר נמצא" in tools_posts.move_posts_tracking() and calls == []
