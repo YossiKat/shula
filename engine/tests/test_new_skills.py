@@ -132,6 +132,19 @@ def test_anycan_monday_uses_its_own_token_and_finds_board_by_name(monkeypatch):
     assert "Inventory" in tools_monday.get_anycan_monday_items(board="list")
 
 
+def test_monday_key_pasted_with_a_trailing_newline_still_works(monkeypatch):
+    monkeypatch.setenv("MONDAY_ANYCAN_API_TOKEN", " anycan\n")
+    seen = []
+
+    def post(url, json, headers, timeout):
+        seen.append(headers["Authorization"])
+        return NS(raise_for_status=lambda: None, json=lambda: {"data": {"updates": []}})
+
+    monkeypatch.setattr(tools_monday.requests, "post", post)
+    tools_monday.get_monday_updates()
+    assert seen == ["anycan"]
+
+
 def test_anycan_monday_without_token_names_the_missing_key(monkeypatch):
     monkeypatch.setenv("MONDAY_API_TOKEN", "ao")
     monkeypatch.delenv("MONDAY_ANYCAN_API_TOKEN", raising=False)

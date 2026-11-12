@@ -15,7 +15,7 @@ ANYCAN_DEFAULT_BOARD = "AnyCan Ai"
 
 def _query(gql: str, variables: dict, account: str = "alphaomega") -> dict:
     env = TOKENS.get(account, TOKENS["alphaomega"])
-    token = os.environ.get(env, "")
+    token = os.environ.get(env, "").strip()  # מפתח שהודבק עם רווח או ירידת שורה בסוף
     if not token:
         raise RuntimeError(f"monday של {account} עדיין לא מחובר (חסר {env} ב-Render)")
     r = requests.post(API, json={"query": gql, "variables": variables},
