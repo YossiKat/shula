@@ -22,7 +22,7 @@ def _fake(monkeypatch, columns=(), groups=()):
 def test_setup_creates_only_what_is_missing(monkeypatch):
     calls = _fake(monkeypatch, columns=[{"id": "v", "title": "👁️ Views", "type": "numbers"}])
     out = tools_posts.setup_posts_tracking()
-    assert [c[0] for c in calls] == ["create_column"] * 5 + ["create_group"]
+    assert [c[0] for c in calls] == ["create_column"] * (len(tools_posts.COLUMNS) - 1) + ["create_group"]
     assert "👁️ Views" not in out and "⬇️ Downloads" in out and calls[-1][1]["n"] == tools_posts.GROUP
     full = [{"id": str(i), "title": t, "type": k} for i, (t, k) in enumerate(tools_posts.COLUMNS)]
     calls = _fake(monkeypatch, columns=full, groups=[{"id": "g1", "title": tools_posts.GROUP}])
@@ -46,3 +46,41 @@ def test_share_is_logged_as_a_row_in_the_posts_group(monkeypatch):
 def test_share_before_setup_explains(monkeypatch):
     calls = _fake(monkeypatch)
     assert "עדיין לא הוכן" in tools_posts.log_post_share("פוסט") and calls == []
+
+
+def test_facebook_shares_are_grouped_under_their_post_and_never_twice(monkeypatch):
+    cols = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"}]
+    sheet = [{"date": "2026-11-12", "time": "12:34", "post": "העוזר החדש", "group": "Parkinson's Warriors", "link": "https://fb/1", "pending": False},
+             {"date": "2026-11-12", "time": "12:33", "post": "העוזר החדש", "group": "DBS Surgery", "link": "https://fb/2", "pending": True},
+             {"date": "2026-11-11", "time": "21:58", "post": "הכירו את aCare Home", "group": "Leven met Parkinson", "link": "https://fb/3", "pending": False}]
+    calls = _fake(monkeypatch, columns=cols, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    monkeypatch.setattr(tools_posts, "_sheet_rows", lambda: sheet)
+    have = {"פייסבוק · הכירו את aCare Home": {"id": "50", "subs": {"2026-11-11 21:58 · Leven met Parkinson"}}}
+    monkeypatch.setattr(tools_posts, "_existing_posts", lambda b, g: have)
+    out = tools_posts.import_facebook_shares()
+    kinds = [c[0] for c in calls]
+    assert kinds == ["create_item", "create_subitem", "create_subitem", "change_multiple_column_values"]
+    assert calls[0][1]["n"] == "פייסבוק · העוזר החדש"
+    assert calls[1][1] == {"p": "900", "n": "2026-11-12 12:33 · DBS Surgery (ממתין לאישור מנהל)"}
+    assert calls[2][1]["n"] == "2026-11-12 12:34 · Parkinson's Warriors"
+    assert json.loads(calls[3][1]["v"]) == {"to": "2 שיתופים ל-2 קבוצות, 1 ממתינים לאישור", "at": {"date": "2026-11-12"}}
+    assert "נרשמו ב-monday 2 שיתופים מפייסבוק תחת 1 פוסטים" in out and "הכול מעודכן" in out
+    calls.clear()
+    assert "נרשמו ב-monday 0" in tools_posts.import_facebook_shares() and calls == []
+
+
+def test_import_stops_at_the_limit_and_says_what_is_left(monkeypatch):
+    cols = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"}]
+    sheet = [{"date": "2026-11-12", "time": f"12:3{i}", "post": "העוזר החדש", "group": f"Group {i}", "link": f"https://fb/{i}", "pending": False}
+             for i in range(3)]
+    calls = _fake(monkeypatch, columns=cols, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    monkeypatch.setattr(tools_posts, "_sheet_rows", lambda: sheet)
+    monkeypatch.setattr(tools_posts, "_existing_posts", lambda b, g: {})
+    out = tools_posts.import_facebook_shares(limit=2)
+    assert [c[0] for c in calls].count("create_subitem") == 2 and "נשארו עוד 1" in out
+
+
+def test_import_prepares_missing_columns_first(monkeypatch):
+    calls = _fake(monkeypatch, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    out = tools_posts.import_facebook_shares()
+    assert [c[0] for c in calls] == ["create_column"] * len(tools_posts.COLUMNS) and "לא הצלחתי" in out
