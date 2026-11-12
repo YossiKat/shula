@@ -197,3 +197,35 @@ def test_tracking_moves_once_from_anycan_ai_to_the_supermetrics_board(monkeypatc
     assert calls[2][1] == {"b": "77", "g": "gold"} and "הועברו 2 פוסטים" in out
     calls.clear()
     assert "כבר נמצא" in tools_posts.move_posts_tracking() and calls == []
+
+
+def test_next_organic_step_follows_the_share_data():
+    from datetime import datetime
+    import tools_calendar
+    now = datetime(2026, 11, 12, 14, 30, tzinfo=tools_calendar.TZ)
+    row = lambda d, t, g, p=False: {"date": d, "time": t, "post": "x", "group": g, "link": g, "pending": p}
+    text, when = tools_posts._next_step([row("2026-11-12", "12:13", "A"), row("2026-11-12", "12:33", "B", True)], now)
+    assert text == "⏳ לבדוק אם מנהלי 1 קבוצות אישרו את הפוסט" and when.strftime("%d.%m %H:%M") == "13.11 10:00"
+    text, when = tools_posts._next_step([row("2026-11-09", "12:13", "A"), row("2026-11-09", "12:14", "B")], now)
+    assert text.startswith("💬") and "2 הקבוצות" in text and when.strftime("%d.%m %H:%M") == "13.11 10:00"
+    text, when = tools_posts._next_step([row("2026-08-02", "13:20", "A")], now)
+    assert text.startswith("♻️") and when.strftime("%d.%m %H:%M") == "13.11 10:00"
+
+
+def test_next_step_is_written_once_on_each_post_row(monkeypatch):
+    cols = SHARE_COLS + [{"id": "ns", "title": "🌱 Next organic step", "type": "text"},
+                         {"id": "na", "title": "⏰ Organic step at", "type": "date"}]
+    calls = _fake(monkeypatch, columns=cols, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    rows = [{"date": "2026-08-02", "time": "13:20", "post": "אליפות", "group": "A", "link": "1", "pending": False}]
+    posts = {"פייסבוק · אליפות": {"id": "50", "subs": {"2026-08-02 13:20 · A"}, "cols": {}}}
+    monkeypatch.setattr(tools_posts, "_sheet_rows", lambda: rows)
+    monkeypatch.setattr(tools_posts, "_existing_posts", lambda b, g: posts)
+    out = tools_posts.import_facebook_shares()
+    (kind, args), = calls
+    v = json.loads(args["v"])
+    assert kind == "change_multiple_column_values" and v["ns"].startswith("♻️") and v["na"]["time"] == "08:00:00"
+    assert "עודכן הצעד הבא ב-1 פוסטים" in out
+    posts["פייסבוק · אליפות"]["cols"] = {"🌱 next organic step": v["ns"], "⏰ organic step at": v["na"]["date"] + " 10:00"}
+    calls.clear()
+    tools_posts.import_facebook_shares()
+    assert calls == []
