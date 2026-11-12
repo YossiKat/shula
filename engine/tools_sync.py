@@ -84,8 +84,8 @@ def _wanted_events(board: dict, items: list, today) -> dict:
             else:
                 ev["start"] = {"date": day.isoformat()}
                 ev["end"] = {"date": (day + timedelta(days=1)).isoformat()}
-            if _is_done(it):
-                ev["colorId"] = tools_calendar.COLOR_IDS["done"]
+            # ירוק בהיר לכל מה שמגיע מה-monday; פריט שבוצע — תכלת, כמו כל משימה שבוצעה ביומן של יוסי
+            ev["colorId"] = tools_calendar.COLOR_IDS["done" if _is_done(it) else "monday"]
             out[key] = ev
     return out
 
@@ -129,7 +129,6 @@ def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool =
             svc.events().insert(calendarId=cal, body=ev).execute()
             added += 1
         elif not _same(old, ev):
-            ev.setdefault("colorId", None)
             svc.events().patch(calendarId=cal, eventId=old["id"], body=ev).execute()
             changed += 1
     for old in existing.values():  # התאריך נמחק מה-monday או שהפריט הוסר
