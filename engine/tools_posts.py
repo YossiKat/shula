@@ -126,6 +126,97 @@ def _stat_values(st: dict) -> dict:
             "💬 interactions": str(last["likes"] + last["comments"] + last["shares"]), "📈 growth": growth}
 
 
+def _local(r: dict):
+    """שעת השיתוף (שעון ישראל) מתוך שורת הגיליון, או None אם התאריך או השעה לא תקינים."""
+    import tools_calendar
+    try:
+        return datetime.strptime(f"{r['date']} {r['time'].zfill(5)}", "%Y-%m-%d %H:%M").replace(tzinfo=tools_calendar.TZ)
+    except (ValueError, KeyError):
+        return None
+
+
+def _monday_datetime(r: dict):
+    """עמודת תאריך ב-monday עם שעה (monday שומר את השעה ב-UTC ומציג אותה בשעון של יוסי)."""
+    from zoneinfo import ZoneInfo
+    when = _local(r)
+    if when is None:
+        try:
+            datetime.strptime(r.get("date", ""), "%Y-%m-%d")
+            return {"date": r["date"]}
+        except ValueError:
+            return None
+    utc = when.astimezone(ZoneInfo("UTC"))
+    return {"date": utc.strftime("%Y-%m-%d"), "time": utc.strftime("%H:%M:%S")}
+
+
+SESSION_GAP = 30  # דקות: שיתופים של אותו פוסט בהפרש קטן מזה = אירוע אחד ביומן
+CAL_TAG = "shula_fbshare"
+
+
+def _share_sessions(rows: list[dict]) -> dict:
+    """{מפתח: אירוע יומן} — אירוע אחד לכל פוסט לכל 'סבב שיתופים' (שיתופים ברצף), בשעה שבה שיתפת."""
+    import tools_calendar
+    from datetime import timedelta
+    by_post = {}
+    for r in rows:
+        when = _local(r)
+        if when:
+            by_post.setdefault(r["post"] or "פוסט", []).append((when, r))
+    out = {}
+    for post, items in by_post.items():
+        items.sort(key=lambda x: x[0])
+        sessions = []
+        for when, r in items:
+            if sessions and (when - sessions[-1][-1][0]).total_seconds() <= SESSION_GAP * 60:
+                sessions[-1].append((when, r))
+            else:
+                sessions.append([(when, r)])
+        for ses in sessions:
+            start, end = ses[0][0], max(ses[-1][0], ses[0][0] + timedelta(minutes=15))
+            groups = len({r["group"] for _, r in ses})
+            waiting = sum(r["pending"] for _, r in ses)
+            key = f"{post[:40]}|{start.strftime('%Y-%m-%d %H:%M')}"
+            lines = [f"{w.strftime('%H:%M')} · {r['group']}" + (" (ממתין לאישור מנהל)" if r["pending"] else "") for w, r in ses]
+            out[key] = {
+                "summary": f"📤 שיתפתי: {post[:60]} → {groups} קבוצות",
+                "description": (f"שיתופים לקבוצות פייסבוק ({len(ses)}" + (f", {waiting} ממתינים לאישור" if waiting else "") + "):\n"
+                                + "\n".join(lines) + "\n\nמתוך המעקב במנדיי של AnyCan (פוסטים ושיתופים)."),
+                "start": {"dateTime": start.isoformat(), "timeZone": "Asia/Jerusalem"},
+                "end": {"dateTime": end.isoformat(), "timeZone": "Asia/Jerusalem"},
+                "colorId": tools_calendar.COLOR_IDS["monday"],
+                "transparency": "transparent",
+                "extendedProperties": {"private": {CAL_TAG: key, f"{CAL_TAG}_on": "1"}},
+            }
+    return out
+
+
+def shares_to_calendar(rows: list[dict]) -> str:
+    """כל סבב שיתופים מופיע ביומן 'יוסי קט' בשעה שבה שיתפת, בירוק בהיר. לא מוחק אירועים ולא נוגע באירועים אחרים."""
+    import tools_calendar
+    svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
+    wanted = _share_sessions(rows)
+    existing, token = {}, None
+    while True:
+        res = svc.events().list(calendarId=cal, privateExtendedProperty=f"{CAL_TAG}_on=1", pageToken=token,
+                                maxResults=250, showDeleted=False).execute()
+        for e in res.get("items", []):
+            existing[e["extendedProperties"]["private"][CAL_TAG]] = e
+        token = res.get("nextPageToken")
+        if not token:
+            break
+    added = changed = 0
+    for key, ev in wanted.items():
+        old = existing.get(key)
+        if old is None:
+            svc.events().insert(calendarId=cal, body=ev).execute()
+            added += 1
+        elif (old.get("summary"), old.get("description"), (old.get("end") or {}).get("dateTime", "")[:16], old.get("colorId")) != \
+                (ev["summary"], ev["description"], ev["end"]["dateTime"][:16], ev["colorId"]):
+            svc.events().patch(calendarId=cal, eventId=old["id"], body=ev).execute()
+            changed += 1
+    return f"ביומן: {added} סבבי שיתוף חדשים, {changed} עודכנו." if added or changed else ""
+
+
 def _sheet_rows() -> list[dict]:
     out = []
     for r in _csv(SHARES_SHEET_ID):
@@ -157,7 +248,8 @@ def _existing_posts(board_id: str, group_id: str) -> dict:
 def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
     """מכניסה ל-monday של AnyCan (קבוצת 'פוסטים ושיתופים') את השיתופים של יוסי לקבוצות פייסבוק מתוך הגיליון 'שיתופים בפייסבוק'
     שבדרייב: שורה אחת לכל פוסט, ומתחתיה תת-שורה לכל קבוצה שהפוסט שותף אליה. שיתוף שכבר רשום לא נרשם שוב.
-    על שורת הפוסט נרשמים גם הקישור לפוסט המקורי, כמות הצפיות, ועלייה באחוזים מאז המדידה הראשונה (מגיליון המדידות היומי).
+    כל סבב שיתופים מופיע גם ביומן 'יוסי קט' בשעה שבה שיתפת, בירוק בהיר.
+    על שורת הפוסט נרשמים גם שעת השיתוף האחרון, הקישור לפוסט המקורי, כמות הצפיות, ועלייה באחוזים מאז המדידה הראשונה (מגיליון המדידות היומי).
     עד 60 שיתופים בכל פעם — אם נשארו, לבקש שוב. השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי', 'המשך ייבוא'
     או 'תעדכני צפיות'. רץ לבד כל שעה."""
     need = ["📅 shared at", "👥 shared to"] + STAT_COLS
@@ -200,12 +292,9 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
         waiting = sum(r["pending"] for r in mine)
         values = {cols["👥 shared to"]: f"{len(mine)} שיתופים ל-{len({r['group'] for r in mine})} קבוצות"
                                         + (f", {waiting} ממתינים לאישור" if waiting else "")}
-        try:
-            last = max(r["date"] for r in mine)
-            datetime.strptime(last, "%Y-%m-%d")
-            values[cols["📅 shared at"]] = {"date": last}
-        except ValueError:
-            pass
+        last = _monday_datetime(max((r for r in mine), key=lambda r: (r["date"], r["time"].zfill(5))))
+        if last:
+            values[cols["📅 shared at"]] = last
         tools_monday._query(
             "mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }",
             {"b": board["id"], "i": posts[post]["id"], "v": json.dumps(values, ensure_ascii=False)}, "anycan")
@@ -223,6 +312,11 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
                 {"b": board["id"], "i": post["id"], "v": json.dumps({cols[k]: v for k, v in want.items()}, ensure_ascii=False)}, "anycan")
             updated += 1
     stats = f" עודכנו צפיות ועלייה ב-{updated} פוסטים." if updated else ""
+    try:
+        cal = shares_to_calendar(rows)
+        stats += f" {cal}" if cal else ""
+    except Exception as e:  # היומן לא יעצור את המנדיי
+        stats += f" (היומן לא עודכן: {str(e)[:120]})"
     return (f"נרשמו ב-monday {done} שיתופים מפייסבוק תחת {len(touched)} פוסטים (מתוך {len(rows)} שיתופים בגיליון)."
             + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן.") + stats)
 
