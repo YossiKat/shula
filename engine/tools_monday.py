@@ -58,8 +58,16 @@ def _format_board(boards: list, search: str) -> str:
 
 
 def _anycan_boards() -> list:
-    data = _query("query { boards(limit: 100, state: active) { id name type } }", {}, "anycan")
-    return [b for b in data.get("boards") or [] if b.get("type") in (None, "board")]
+    """כל הלוחות בחשבון, מהאחרון שהיה בשימוש — עוברת על כל העמודים (בחשבון יש יותר מ-100 לוחות)."""
+    out = []
+    for page in range(1, 11):
+        data = _query("query ($page: Int!) { boards(limit: 100, page: $page, state: active, order_by: used_at) { id name type } }",
+                      {"page": page}, "anycan")
+        batch = data.get("boards") or []
+        out += [b for b in batch if b.get("type") in (None, "board")]
+        if len(batch) < 100:
+            break
+    return out
 
 
 def get_anycan_monday_items(search: str = "", limit: int = 30, board: str = ANYCAN_DEFAULT_BOARD) -> str:
@@ -70,11 +78,11 @@ def get_anycan_monday_items(search: str = "", limit: int = 30, board: str = ANYC
     boards = _anycan_boards()
     want = (board or ANYCAN_DEFAULT_BOARD).strip().lower()
     if want == "list":
-        return "<monday_data>\nהלוחות ב-monday של AnyCan:\n" + "\n".join(f"- {b['name']}" for b in boards) + "\n</monday_data>"
+        return "<monday_data>\nהלוחות ב-monday של AnyCan:\n" + "\n".join(f"- {b['name']}" for b in boards[:60]) + "\n</monday_data>"
     match = ([b for b in boards if b["name"].strip().lower() == want]
              or [b for b in boards if want in b["name"].lower()])
     if not match:
-        return f"לא מצאתי לוח בשם '{board}' ב-monday של AnyCan. הלוחות שיש: " + ", ".join(b["name"] for b in boards)
+        return f"לא מצאתי לוח בשם '{board}' ב-monday של AnyCan. הלוחות האחרונים שהיו בשימוש: " + ", ".join(b["name"] for b in boards[:15])
     gql = """query ($ids: [ID!], $limit: Int!) {
       boards(ids: $ids) { name items_page(limit: $limit) { items {
         id name updated_at group { title } column_values { column { title } text }

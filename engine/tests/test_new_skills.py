@@ -132,6 +132,23 @@ def test_anycan_monday_uses_its_own_token_and_finds_board_by_name(monkeypatch):
     assert "Inventory" in tools_monday.get_anycan_monday_items(board="list")
 
 
+def test_anycan_board_is_found_even_when_it_is_past_the_first_100(monkeypatch):
+    monkeypatch.setenv("MONDAY_ANYCAN_API_TOKEN", "anycan")
+
+    def post(url, json, headers, timeout):
+        if "items_page" in json["query"]:
+            assert json["variables"]["ids"] == ["777"]
+            data = {"boards": [{"name": "AnyCan Ai", "items_page": {"items": []}}]}
+        elif json["variables"]["page"] == 1:
+            data = {"boards": [{"id": str(i), "name": f"Template {i}", "type": "board"} for i in range(100)]}
+        else:
+            data = {"boards": [{"id": "777", "name": "AnyCan Ai", "type": "board"}]}
+        return NS(raise_for_status=lambda: None, json=lambda: {"data": data})
+
+    monkeypatch.setattr(tools_monday.requests, "post", post)
+    assert "לא מצאתי לוח" not in tools_monday.get_anycan_monday_items()
+
+
 def test_monday_key_pasted_with_a_trailing_newline_still_works(monkeypatch):
     monkeypatch.setenv("MONDAY_ANYCAN_API_TOKEN", " anycan\n")
     seen = []
