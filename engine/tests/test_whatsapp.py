@@ -148,6 +148,7 @@ def test_slow_answer_in_async_mode_sends_no_waiting_message(client, monkeypatch)
     pushed = []
     monkeypatch.setattr(main, "ASYNC_MODE", True)
     monkeypatch.setattr(main, "_push_blocked", False)
+    monkeypatch.setattr(main, "_push_ok", True)
     monkeypatch.setattr(main, "_send_whatsapp", lambda to, text: pushed.append(text))
     monkeypatch.setattr(main.shula_agent, "reply", lambda *a: (time.sleep(0.6), "התשובה המלאה")[1])
     xml = _send(client, "שאלה קשה")
@@ -164,3 +165,18 @@ def test_waiting_message_stays_when_push_is_blocked(client, monkeypatch):
     monkeypatch.setattr(main, "_push_blocked", True)
     monkeypatch.setattr(main.shula_agent, "reply", lambda *a: (time.sleep(0.6), "x")[1])
     assert "המשך" in _send(client, "שאלה קשה")
+
+
+def test_after_a_restart_the_first_slow_answer_is_not_silent(client, monkeypatch):
+    # אחרי הפעלה מחדש עוד לא ידוע אם Twilio מאפשר לשלוח לבד — אז לא שותקים
+    monkeypatch.setattr(main, "ASYNC_MODE", True)
+    monkeypatch.setattr(main, "_push_blocked", False)
+    monkeypatch.setattr(main, "_push_ok", False)
+    monkeypatch.setattr(main, "_send_whatsapp", lambda to, text: (_ for _ in ()).throw(RuntimeError("Primary compliance profile is not approved")))
+    monkeypatch.setattr(main.shula_agent, "reply", lambda *a: (time.sleep(0.6), "x")[1])
+    assert "המשך" in _send(client, "שאלה קשה")
+    for _ in range(40):
+        if main._push_blocked:
+            break
+        time.sleep(0.05)
+    assert main._push_blocked is True

@@ -15,7 +15,7 @@ SHARE_COLS = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "t
 def _fake(monkeypatch, columns=(), groups=()):
     calls = []
     board = {"id": "77", "name": "AnyCan Ai", "columns": list(columns), "groups": list(groups)}
-    monkeypatch.setattr(tools_monday, "_anycan_boards", lambda: [{"id": "77", "name": "AnyCan Ai", "type": "board"}])
+    monkeypatch.setattr(tools_monday, "_anycan_boards", lambda: [{"id": "77", "name": "Supermetrics Campaign Reporting", "type": "board"}])
 
     def query(gql, variables, account="alphaomega"):
         assert account == "anycan"
@@ -26,6 +26,7 @@ def _fake(monkeypatch, columns=(), groups=()):
     monkeypatch.setattr(tools_monday, "_query", query)
     monkeypatch.setattr(tools_posts, "_original_stats", lambda: {})
     monkeypatch.setattr(tools_posts, "shares_to_calendar", lambda rows: "")
+    monkeypatch.setattr(tools_posts, "move_posts_tracking", lambda: "המעקב כבר נמצא בלוח")
     return calls
 
 
@@ -167,3 +168,32 @@ def test_each_share_round_is_one_light_green_event_at_the_share_time(monkeypatch
     assert tools_posts.shares_to_calendar(rows) == "" and cal.calls == []
     rows.append({"date": "2026-11-12", "time": "12:40", "post": "העוזר החדש", "group": "D", "link": "5", "pending": False})
     assert "1 עודכנו" in tools_posts.shares_to_calendar(rows) and cal.calls == ["patch"]
+
+
+def test_tracking_moves_once_from_anycan_ai_to_the_supermetrics_board(monkeypatch):
+    old = {"id": "77", "name": "AnyCan Ai", "groups": [{"id": "gold", "title": tools_posts.GROUP}],
+           "columns": [{"id": "name", "title": "Name", "type": "name"}, {"id": "v1", "title": "👁️ Views", "type": "numbers"},
+                       {"id": "st", "title": "Stage", "type": "status"}]}
+    new = {"id": "88", "name": "Supermetrics Campaign Reporting", "groups": [{"id": "gnew", "title": tools_posts.GROUP}],
+           "columns": [{"id": "name", "title": "Name", "type": "name"}, {"id": "v2", "title": "👁️ Views", "type": "numbers"}]}
+    calls = []
+    monkeypatch.setattr(tools_monday, "_anycan_boards", lambda: [{"id": "77", "name": "AnyCan Ai", "type": "board"},
+                                                                 {"id": "88", "name": "Supermetrics Campaign Reporting", "type": "board"}])
+
+    def query(gql, variables, account="alphaomega"):
+        if "boards(ids: $ids)" in gql:
+            return {"boards": [old if variables["ids"] == ["77"] else new]}
+        if "items_page" in gql:
+            return {"boards": [{"groups": [{"items_page": {"cursor": None, "items": [{"id": "1"}, {"id": "2"}]}}]}]}
+        calls.append((gql.split("{")[1].split("(")[0].strip(), variables))
+        return {}
+    monkeypatch.setattr(tools_monday, "_query", query)
+    monkeypatch.setattr(tools_posts, "setup_posts_tracking", lambda: "")
+    monkeypatch.setattr(tools_posts, "_moved", False)
+    out = tools_posts.move_posts_tracking()
+    assert [c[0] for c in calls] == ["move_item_to_board", "move_item_to_board", "archive_group"]
+    assert calls[0][1]["b"] == "88" and calls[0][1]["g"] == "gnew"
+    assert {"source": "v1", "target": "v2"} in calls[0][1]["m"] and {"source": "st", "target": None} in calls[0][1]["m"]
+    assert calls[2][1] == {"b": "77", "g": "gold"} and "הועברו 2 פוסטים" in out
+    calls.clear()
+    assert "כבר נמצא" in tools_posts.move_posts_tracking() and calls == []

@@ -1,4 +1,4 @@
-"""מעקב פוסטים ושיתופים ב-monday של AnyCan: קבוצה "פוסטים ושיתופים" בלוח AnyCan Ai,
+"""מעקב פוסטים ושיתופים ב-monday של AnyCan: קבוצה "פוסטים ושיתופים" בלוח Supermetrics Campaign Reporting,
 עם אותן עמודות שיש בלוח של Alpha Omega (חשיפה, צפיות, תגובות, הצעד האורגני הבא) ועוד עמודת הורדות."""
 import csv
 import io
@@ -23,19 +23,70 @@ SHARES_SHEET_ID = os.environ.get("FB_SHARES_SHEET_ID", "10pFuwwS7KQXY4-DIAYiIeqK
 IMPORT_BATCH = 60
 
 
-def _board() -> dict:
-    want = tools_monday.ANYCAN_DEFAULT_BOARD.lower()
+# הלוח שבו מתנהל המעקב אחרי פוסטים ושיתופים (יוסי בחר: Supermetrics Campaign Reporting).
+POSTS_BOARD = os.environ.get("MONDAY_POSTS_BOARD", "Supermetrics Campaign Reporting")
+OLD_BOARD = tools_monday.ANYCAN_DEFAULT_BOARD  # כאן היה המעקב לפני כן — הפריטים עוברים משם
+
+
+def _board(name: str = "") -> dict:
+    name = name or POSTS_BOARD
+    want = name.strip().lower()
     boards = tools_monday._anycan_boards()
     match = [b for b in boards if b["name"].strip().lower() == want] or [b for b in boards if want in b["name"].lower()]
     if not match:
-        raise RuntimeError(f"לא מצאתי את הלוח '{tools_monday.ANYCAN_DEFAULT_BOARD}' ב-monday של AnyCan")
+        raise RuntimeError(f"לא מצאתי את הלוח '{name}' ב-monday של AnyCan")
     data = tools_monday._query("query ($ids: [ID!]) { boards(ids: $ids) { id name columns { id title type } groups { id title } } }",
                                {"ids": [match[0]["id"]]}, "anycan")
     return data["boards"][0]
 
 
+_moved = False  # אחרי מעבר מוצלח אחד לא בודקים שוב עד ההפעלה הבאה
+
+
+def move_posts_tracking() -> str:
+    """מעבירה את קבוצת 'פוסטים ושיתופים' (כל הפוסטים, השורות הקטנות של הקבוצות והעמודות) מהלוח AnyCan Ai
+    ללוח Supermetrics Campaign Reporting, ומעבירה לארכיון את הקבוצה הריקה שנשארה. מה שכבר עבר לא עובר שוב.
+    רץ לבד לפני כל ייבוא; השתמשי גם כשיוסי מבקש 'תעבירי את המעקב פוסטים ל-Supermetrics'."""
+    global _moved
+    if _moved or OLD_BOARD.strip().lower() == POSTS_BOARD.strip().lower():
+        return "המעקב כבר נמצא בלוח " + POSTS_BOARD + "."
+    try:
+        old = _board(OLD_BOARD)
+    except RuntimeError:
+        _moved = True
+        return "המעקב כבר נמצא בלוח " + POSTS_BOARD + "."
+    old_group = next((g for g in old["groups"] if g["title"].strip() == GROUP), None)
+    if not old_group:
+        _moved = True
+        return "המעקב כבר נמצא בלוח " + POSTS_BOARD + "."
+    setup_posts_tracking()  # קבוצה ועמודות בלוח החדש
+    new = _board()
+    new_group = next(g for g in new["groups"] if g["title"].strip() == GROUP)
+    by_title = {c["title"].strip().lower(): c["id"] for c in new["columns"]}
+    mapping = [{"source": c["id"], "target": by_title.get(c["title"].strip().lower())} for c in old["columns"]]
+    ids = []
+    page = tools_monday._query(
+        "query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 100) { cursor items { id } } } } }",
+        {"b": [old["id"]], "g": [old_group["id"]]}, "anycan")["boards"][0]["groups"][0]["items_page"]
+    while True:
+        ids += [it["id"] for it in page["items"]]
+        if not page.get("cursor"):
+            break
+        page = tools_monday._query("query ($c: String!) { next_items_page(cursor: $c, limit: 100) { cursor items { id } } }",
+                                   {"c": page["cursor"]}, "anycan")["next_items_page"]
+    for item_id in ids:
+        tools_monday._query(
+            "mutation ($b: ID!, $g: ID!, $i: ID!, $m: [ColumnMappingInput!]) "
+            "{ move_item_to_board(board_id: $b, group_id: $g, item_id: $i, columns_mapping: $m) { id } }",
+            {"b": new["id"], "g": new_group["id"], "i": item_id, "m": mapping}, "anycan")
+    tools_monday._query("mutation ($b: ID!, $g: String!) { archive_group(board_id: $b, group_id: $g) { id } }",
+                        {"b": old["id"], "g": old_group["id"]}, "anycan")
+    _moved = True
+    return f"הועברו {len(ids)} פוסטים (עם כל השיתופים שלהם) מהלוח {OLD_BOARD} ללוח {POSTS_BOARD}. הקבוצה הריקה הועברה לארכיון."
+
+
 def setup_posts_tracking() -> str:
-    """מכינה ב-monday של AnyCan (לוח AnyCan Ai) את המעקב אחרי פוסטים ושיתופים: קבוצה 'פוסטים ושיתופים' ועמודות
+    """מכינה ב-monday של AnyCan (לוח Supermetrics Campaign Reporting) את המעקב אחרי פוסטים ושיתופים: קבוצה 'פוסטים ושיתופים' ועמודות
     Reach, Views, Interactions, Downloads, Next organic step, Organic step at. מה שכבר קיים לא נוצר שוב.
     השתמשי פעם אחת, כשיוסי מבקש 'תכיני את המעקב אחרי פוסטים במנדיי'."""
     board = _board()
@@ -52,8 +103,8 @@ def setup_posts_tracking() -> str:
                             {"b": board["id"], "n": GROUP}, "anycan")
         made.append(f"הקבוצה {GROUP}")
     if not made:
-        return "הכול כבר קיים בלוח AnyCan Ai — לא נוצר שום דבר חדש."
-    return "נוצרו בלוח AnyCan Ai: " + ", ".join(made)
+        return f"הכול כבר קיים בלוח {board['name']} — לא נוצר שום דבר חדש."
+    return f"נוצרו בלוח {board['name']}: " + ", ".join(made)
 
 
 def log_post_share(title: str, platform: str = "", shared_to: str = "", link: str = "", next_step: str = "",
@@ -252,6 +303,12 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
     על שורת הפוסט נרשמים גם שעת השיתוף האחרון, הקישור לפוסט המקורי, כמות הצפיות, ועלייה באחוזים מאז המדידה הראשונה (מגיליון המדידות היומי).
     עד 60 שיתופים בכל פעם — אם נשארו, לבקש שוב. השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי', 'המשך ייבוא'
     או 'תעדכני צפיות'. רץ לבד כל שעה."""
+    moved = ""
+    try:
+        out = move_posts_tracking()
+        moved = "" if out.startswith("המעקב כבר") else out + " "
+    except Exception as e:  # המעבר לא יעצור את הייבוא
+        moved = f"(המעבר ללוח {POSTS_BOARD} לא הצליח: {str(e)[:120]}) "
     need = ["📅 shared at", "👥 shared to"] + STAT_COLS
     for attempt in range(2):
         board = _board()
@@ -262,7 +319,7 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
         if attempt == 0:
             setup_posts_tracking()  # יוצרת את מה שחסר (קבוצה או עמודות)
     else:
-        return "לא הצלחתי להכין את הקבוצה והעמודות בלוח AnyCan Ai."
+        return f"לא הצלחתי להכין את הקבוצה והעמודות בלוח {POSTS_BOARD}."
     rows = _sheet_rows()
     posts = _existing_posts(board["id"], group["id"])
     budget = max(1, min(int(limit), 200))
@@ -317,8 +374,8 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
         stats += f" {cal}" if cal else ""
     except Exception as e:  # היומן לא יעצור את המנדיי
         stats += f" (היומן לא עודכן: {str(e)[:120]})"
-    return (f"נרשמו ב-monday {done} שיתופים מפייסבוק תחת {len(touched)} פוסטים (מתוך {len(rows)} שיתופים בגיליון)."
+    return moved + (f"נרשמו ב-monday {done} שיתופים מפייסבוק תחת {len(touched)} פוסטים (מתוך {len(rows)} שיתופים בגיליון)."
             + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן.") + stats)
 
 
-POSTS_TOOLS = [setup_posts_tracking, log_post_share, import_facebook_shares]
+POSTS_TOOLS = [setup_posts_tracking, log_post_share, import_facebook_shares, move_posts_tracking]
