@@ -138,10 +138,14 @@ def log_post_share(title: str, platform: str = "", shared_to: str = "", link: st
 
 
 def _csv(sheet_id: str) -> list[list[str]]:
+    return _csv_with_header(sheet_id)[1:]
+
+
+def _csv_with_header(sheet_id: str) -> list[list[str]]:
     import google_auth
     raw = google_auth.service("drive", "v3", google_auth.MAIN).files().export(fileId=sheet_id, mimeType="text/csv").execute()
     text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
-    return list(csv.reader(io.StringIO(text)))[1:]
+    return list(csv.reader(io.StringIO(text)))
 
 
 def _num(v: str):
