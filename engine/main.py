@@ -74,6 +74,13 @@ def _send_whatsapp(to: str, text: str) -> None:
 
 
 _push_blocked = False  # נדלק אם Twilio חוסם שליחה יזומה (KYC לא אושר)
+# שולחים בשקט ("התשובה תגיע לבד") רק אחרי ששליחה יזומה הצליחה פעם אחת מאז ששולה עלתה.
+# אחרת, אחרי כל הפעלה מחדש התשובה הראשונה נתקעת בשקט ויוסי חושב ששולה לא עונה.
+_push_ok = False
+
+
+def _can_push() -> bool:
+    return ASYNC_MODE and _push_ok and not _push_blocked
 
 
 def _push_when_ready(sender: str, fut) -> None:
@@ -82,9 +89,10 @@ def _push_when_ready(sender: str, fut) -> None:
         return
 
     def run():
-        global _push_blocked
+        global _push_blocked, _push_ok
         try:
             _send_whatsapp(sender, fut.result())
+            _push_ok = True
             if _pending.get(sender) is fut:
                 _pending.pop(sender, None)
         except Exception as e:
@@ -265,7 +273,7 @@ async def whatsapp_webhook(
                 _pending[From] = asyncio.ensure_future(chain())
                 if ASYNC_MODE and not _push_blocked:
                     _pending[From].add_done_callback(lambda f, s=From: _push_when_ready(s, f))
-            if ASYNC_MODE and not _push_blocked:
+            if _can_push():
                 return _silent()  # התשובה בדרך ותישלח לבד
             return _twiml("עוד רגע, אני עדיין בודקת… שלח לי 'המשך' בעוד כמה שניות.")
         if user_message in NUDGES:
@@ -282,7 +290,9 @@ async def whatsapp_webhook(
         if ASYNC_MODE and not _push_blocked:
             # התשובה תישלח לבד כשתהיה מוכנה (יוסי רואה "מקלידה...") — בלי הודעת "שלח המשך"
             fut.add_done_callback(lambda f, s=From: _push_when_ready(s, f))
-            return _silent()
+            if _push_ok:
+                return _silent()
+            return _twiml("רגע, בודקת… 🔎 אם התשובה לא מגיעה לבד תוך דקה, שלח לי 'המשך'.")
         return _twiml("רגע, בודקת… 🔎 שלח לי 'המשך' בעוד כמה שניות ואמסור את התשובה.")
     return _twiml(text)
 
