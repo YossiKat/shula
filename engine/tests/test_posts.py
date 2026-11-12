@@ -1,3 +1,4 @@
+from types import SimpleNamespace as NS
 import json
 
 import tools_monday
@@ -24,6 +25,7 @@ def _fake(monkeypatch, columns=(), groups=()):
         return {"create_item": {"id": "900"}}
     monkeypatch.setattr(tools_monday, "_query", query)
     monkeypatch.setattr(tools_posts, "_original_stats", lambda: {})
+    monkeypatch.setattr(tools_posts, "shares_to_calendar", lambda rows: "")
     return calls
 
 
@@ -71,7 +73,8 @@ def test_facebook_shares_are_grouped_under_their_post_and_never_twice(monkeypatc
     assert calls[0][1]["n"] == "פייסבוק · העוזר החדש"
     assert calls[1][1] == {"p": "900", "n": "2026-11-12 12:33 · DBS Surgery (ממתין לאישור מנהל)"}
     assert calls[2][1]["n"] == "2026-11-12 12:34 · Parkinson's Warriors"
-    assert json.loads(calls[3][1]["v"]) == {"to": "2 שיתופים ל-2 קבוצות, 1 ממתינים לאישור", "at": {"date": "2026-11-12"}}
+    assert json.loads(calls[3][1]["v"]) == {"to": "2 שיתופים ל-2 קבוצות, 1 ממתינים לאישור",
+                                            "at": {"date": "2026-11-12", "time": "10:34:00"}}
     assert "נרשמו ב-monday 2 שיתופים מפייסבוק תחת 1 פוסטים" in out and "הכול מעודכן" in out
     calls.clear()
     assert "נרשמו ב-monday 0" in tools_posts.import_facebook_shares() and calls == []
@@ -120,3 +123,47 @@ def test_first_measurement_and_posts_without_view_counts(monkeypatch):
     photo = {"date": "2026-11-12", "views": None, "likes": 5, "comments": 0, "shares": 2}
     v = tools_posts._stat_values({"link": "l", "first": photo, "last": photo})
     assert v["👁️ views"] == "" and v["💬 interactions"] == "7" and "אין ספירת צפיות" in v["📈 growth"]
+
+
+class _Cal:
+    def __init__(self):
+        self.store, self.calls = {}, []
+
+    def events(self):
+        return self
+
+    def list(self, calendarId, privateExtendedProperty, pageToken=None, maxResults=250, showDeleted=False):
+        return NS(execute=lambda: {"items": list(self.store.values())})
+
+    def insert(self, calendarId, body):
+        def go():
+            body["id"] = f"e{len(self.store)}"
+            self.store[body["id"]] = body
+            self.calls.append("insert")
+        return NS(execute=go)
+
+    def patch(self, calendarId, eventId, body):
+        def go():
+            self.store[eventId].update(body)
+            self.calls.append("patch")
+        return NS(execute=go)
+
+
+def test_each_share_round_is_one_light_green_event_at_the_share_time(monkeypatch):
+    import tools_calendar
+    cal = _Cal()
+    monkeypatch.setattr(tools_calendar, "_svc", lambda: cal)
+    rows = [{"date": "2026-11-12", "time": "12:13", "post": "העוזר החדש", "group": "A", "link": "1", "pending": False},
+            {"date": "2026-11-12", "time": "12:34", "post": "העוזר החדש", "group": "B", "link": "2", "pending": True},
+            {"date": "2026-11-12", "time": "21:58", "post": "העוזר החדש", "group": "C", "link": "3", "pending": False},
+            {"date": "2026-11-11", "time": "9:05", "post": "פוסט אחר", "group": "A", "link": "4", "pending": False}]
+    out = tools_posts.shares_to_calendar(rows)
+    assert "3 סבבי שיתוף חדשים" in out and cal.calls == ["insert"] * 3
+    first = next(e for e in cal.store.values() if e["start"]["dateTime"].startswith("2026-11-12T12:13"))
+    assert first["summary"] == "📤 שיתפתי: העוזר החדש → 2 קבוצות" and first["colorId"] == "2"
+    assert first["end"]["dateTime"].startswith("2026-11-12T12:34") and "12:34 · B (ממתין לאישור מנהל)" in first["description"]
+    assert any(e["start"]["dateTime"].startswith("2026-11-11T09:05") for e in cal.store.values())
+    cal.calls.clear()
+    assert tools_posts.shares_to_calendar(rows) == "" and cal.calls == []
+    rows.append({"date": "2026-11-12", "time": "12:40", "post": "העוזר החדש", "group": "D", "link": "5", "pending": False})
+    assert "1 עודכנו" in tools_posts.shares_to_calendar(rows) and cal.calls == ["patch"]
