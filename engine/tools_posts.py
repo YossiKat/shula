@@ -267,6 +267,36 @@ def shares_to_calendar(rows: list[dict]) -> str:
     return f"ביומן: {added} סבבי שיתוף חדשים, {changed} עודכנו." if added or changed else ""
 
 
+def _tz():
+    import tools_calendar
+    return tools_calendar.TZ
+
+
+def _utc():
+    from zoneinfo import ZoneInfo
+    return ZoneInfo("UTC")
+
+
+def _next_step(mine: list[dict], now: datetime) -> tuple[str, datetime]:
+    """הצעד האורגני הבא לפוסט, לפי השיתופים שלו: (מה לעשות, מתי — שעון ישראל).
+    ממתינים לאישור → לבדוק אם אישרו; שותף בשבוע האחרון → לענות לתגובות; ישן יותר → לשתף שוב לקבוצות חדשות."""
+    from datetime import timedelta
+    times = [t for t in (_local(r) for r in mine) if t]
+    last = max(times) if times else now
+    waiting = sum(r["pending"] for r in mine)
+    groups = len({r["group"] for r in mine})
+    if waiting:
+        text, when = f"⏳ לבדוק אם מנהלי {waiting} קבוצות אישרו את הפוסט", last + timedelta(days=1)
+    elif (now - last).days < 7:
+        text, when = f"💬 לענות לתגובות ב-{groups} הקבוצות שבהן שותף", last + timedelta(days=1)
+    else:
+        text, when = f"♻️ לשתף שוב לקבוצות חדשות (עד עכשיו {groups} קבוצות)", now + timedelta(days=1)
+    when = when.replace(hour=10, minute=0, second=0, microsecond=0)
+    if when < now:  # תאריך שעבר → מחר ב-10:00
+        when = (now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    return text, when
+
+
 def _sheet_rows() -> list[dict]:
     out = []
     for r in _csv(SHARES_SHEET_ID):
@@ -368,6 +398,29 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
                 {"b": board["id"], "i": post["id"], "v": json.dumps({cols[k]: v for k, v in want.items()}, ensure_ascii=False)}, "anycan")
             updated += 1
     stats = f" עודכנו צפיות ועלייה ב-{updated} פוסטים." if updated else ""
+    steps = 0
+    if all(n in cols for n in ("🌱 next organic step", "⏰ organic step at")):  # הצעד האורגני הבא, לפי הנתונים
+        now = datetime.now(_tz())
+        by_post = {}
+        for r in rows:
+            by_post.setdefault(f"פייסבוק · {r['post'] or 'פוסט'}"[:250], []).append(r)
+        for name, mine in by_post.items():
+            post = posts.get(name)
+            if not post:
+                continue
+            text, when = _next_step(mine, now)
+            have = post.get("cols", {})
+            if have.get("🌱 next organic step", "") == text and have.get("⏰ organic step at", "").startswith(when.strftime("%Y-%m-%d")):
+                continue
+            utc = when.astimezone(_utc())
+            tools_monday._query(
+                "mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }",
+                {"b": board["id"], "i": post["id"], "v": json.dumps({
+                    cols["🌱 next organic step"]: text,
+                    cols["⏰ organic step at"]: {"date": utc.strftime("%Y-%m-%d"), "time": utc.strftime("%H:%M:%S")}},
+                    ensure_ascii=False)}, "anycan")
+            steps += 1
+    stats += f" עודכן הצעד הבא ב-{steps} פוסטים." if steps else ""
     try:
         cal = shares_to_calendar(rows)
         stats += f" {cal}" if cal else ""
