@@ -3,6 +3,13 @@ import json
 import tools_monday
 import tools_posts
 
+REAL_STATS = tools_posts._original_stats
+
+
+SHARE_COLS = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"},
+              {"id": "ln", "title": "🔗 Post link", "type": "text"}, {"id": "vw", "title": "👁️ Views", "type": "numbers"},
+              {"id": "in", "title": "💬 Interactions", "type": "numbers"}, {"id": "gr", "title": "📈 Growth", "type": "text"}]
+
 
 def _fake(monkeypatch, columns=(), groups=()):
     calls = []
@@ -16,6 +23,7 @@ def _fake(monkeypatch, columns=(), groups=()):
         calls.append((gql.split("{")[1].split("(")[0].strip(), variables))
         return {"create_item": {"id": "900"}}
     monkeypatch.setattr(tools_monday, "_query", query)
+    monkeypatch.setattr(tools_posts, "_original_stats", lambda: {})
     return calls
 
 
@@ -49,7 +57,7 @@ def test_share_before_setup_explains(monkeypatch):
 
 
 def test_facebook_shares_are_grouped_under_their_post_and_never_twice(monkeypatch):
-    cols = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"}]
+    cols = SHARE_COLS
     sheet = [{"date": "2026-11-12", "time": "12:34", "post": "העוזר החדש", "group": "Parkinson's Warriors", "link": "https://fb/1", "pending": False},
              {"date": "2026-11-12", "time": "12:33", "post": "העוזר החדש", "group": "DBS Surgery", "link": "https://fb/2", "pending": True},
              {"date": "2026-11-11", "time": "21:58", "post": "הכירו את aCare Home", "group": "Leven met Parkinson", "link": "https://fb/3", "pending": False}]
@@ -70,7 +78,7 @@ def test_facebook_shares_are_grouped_under_their_post_and_never_twice(monkeypatc
 
 
 def test_import_stops_at_the_limit_and_says_what_is_left(monkeypatch):
-    cols = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"}]
+    cols = SHARE_COLS
     sheet = [{"date": "2026-11-12", "time": f"12:3{i}", "post": "העוזר החדש", "group": f"Group {i}", "link": f"https://fb/{i}", "pending": False}
              for i in range(3)]
     calls = _fake(monkeypatch, columns=cols, groups=[{"id": "g1", "title": tools_posts.GROUP}])
@@ -84,3 +92,31 @@ def test_import_prepares_missing_columns_first(monkeypatch):
     calls = _fake(monkeypatch, groups=[{"id": "g1", "title": tools_posts.GROUP}])
     out = tools_posts.import_facebook_shares()
     assert [c[0] for c in calls] == ["create_column"] * len(tools_posts.COLUMNS) and "לא הצלחתי" in out
+
+
+def test_post_row_gets_original_link_views_and_growth_percent(monkeypatch):
+    calls = _fake(monkeypatch, columns=SHARE_COLS, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    posts = {"פייסבוק · העוזר החדש": {"id": "50", "subs": set(), "cols": {}}}
+    rows = [["2026-11-12", "העוזר החדש", "https://fb/reel/1", "130", "3", "1", "36"],
+            ["2026-11-14", "העוזר החדש", "https://fb/reel/1", "410", "9", "2", "40"],
+            ["2026-11-14", "פוסט שלא במנדיי", "https://fb/p/2", "", "1", "0", "0"]]
+    monkeypatch.setattr(tools_posts, "_sheet_rows", lambda: [])
+    monkeypatch.setattr(tools_posts, "_existing_posts", lambda b, g: posts)
+    monkeypatch.setattr(tools_posts, "_original_stats", REAL_STATS)
+    monkeypatch.setattr(tools_posts, "_csv", lambda sheet_id: rows)
+    out = tools_posts.import_facebook_shares()
+    assert [c[0] for c in calls] == ["change_multiple_column_values"] and "עודכנו צפיות ועלייה ב-1 פוסטים" in out
+    assert json.loads(calls[0][1]["v"]) == {"ln": "https://fb/reel/1", "vw": "410", "in": "51",
+                                            "gr": "+215% (130 ב-12.11 → 410 ב-14.11)"}
+    posts["פייסבוק · העוזר החדש"]["cols"] = {"🔗 post link": "https://fb/reel/1", "👁️ views": "410", "💬 interactions": "51",
+                                             "📈 growth": "+215% (130 ב-12.11 → 410 ב-14.11)"}
+    calls.clear()
+    assert "עודכנו" not in tools_posts.import_facebook_shares() and calls == []
+
+
+def test_first_measurement_and_posts_without_view_counts(monkeypatch):
+    first = {"date": "2026-11-12", "views": 130, "likes": 3, "comments": 1, "shares": 36}
+    assert tools_posts._stat_values({"link": "l", "first": first, "last": first})["📈 growth"] == "נמדד לראשונה ב-12.11: 130 צפיות"
+    photo = {"date": "2026-11-12", "views": None, "likes": 5, "comments": 0, "shares": 2}
+    v = tools_posts._stat_values({"link": "l", "first": photo, "last": photo})
+    assert v["👁️ views"] == "" and v["💬 interactions"] == "7" and "אין ספירת צפיות" in v["📈 growth"]

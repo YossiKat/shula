@@ -13,8 +13,11 @@ GROUP = "📣 פוסטים ושיתופים"
 COLUMNS = [  # (כותרת, סוג)
     ("📊 Reach", "numbers"), ("👁️ Views", "numbers"), ("💬 Interactions", "numbers"), ("⬇️ Downloads", "numbers"),
     ("🌱 Next organic step", "text"), ("⏰ Organic step at", "date"),
-    ("📅 Shared at", "date"), ("👥 Shared to", "text"), ("🔗 Post link", "text"),
+    ("📅 Shared at", "date"), ("👥 Shared to", "text"), ("🔗 Post link", "text"), ("📈 Growth", "text"),
 ]
+# גיליון בדרייב עם מדידה יומית של כל פוסט מקורי: תאריך בדיקה, פוסט, קישור למקורי, צפיות, לייקים, תגובות, שיתופים
+ORIGINALS_SHEET_ID = os.environ.get("FB_ORIGINALS_SHEET_ID", "1tByY-jkAB6U2fOugigSqJfO32ToKtfTN-LAn0S-DDRY")
+STAT_COLS = ["🔗 post link", "👁️ views", "💬 interactions", "📈 growth"]
 # גיליון בדרייב של יוסי עם השיתופים שלו בפייסבוק (Claude ממלא אותו מיומן הפעילות): תאריך, שעה, פוסט, קבוצה, קישור, ממתין
 SHARES_SHEET_ID = os.environ.get("FB_SHARES_SHEET_ID", "10pFuwwS7KQXY4-DIAYiIeqKq88pWESQ_e7PKMIi27fY")
 IMPORT_BATCH = 60
@@ -84,12 +87,48 @@ def log_post_share(title: str, platform: str = "", shared_to: str = "", link: st
     return f"נרשם ב-monday (פוסטים ושיתופים): {name}"
 
 
-def _sheet_rows() -> list[dict]:
+def _csv(sheet_id: str) -> list[list[str]]:
     import google_auth
-    raw = google_auth.service("drive", "v3", google_auth.MAIN).files().export(fileId=SHARES_SHEET_ID, mimeType="text/csv").execute()
+    raw = google_auth.service("drive", "v3", google_auth.MAIN).files().export(fileId=sheet_id, mimeType="text/csv").execute()
     text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+    return list(csv.reader(io.StringIO(text)))[1:]
+
+
+def _num(v: str):
+    v = (v or "").replace(",", "").strip()
+    return int(float(v)) if v.replace(".", "", 1).isdigit() else None
+
+
+def _original_stats() -> dict:
+    """{שם הפוסט: {"link", "first": מדידה ראשונה, "last": מדידה אחרונה}} מתוך גיליון המדידות היומיות."""
+    out = {}
+    rows = [[c.strip() for c in (r + [""] * 7)[:7]] for r in _csv(ORIGINALS_SHEET_ID)]
+    for r in sorted((r for r in rows if r[0] and r[1]), key=lambda r: r[0]):
+        m = {"date": r[0], "views": _num(r[3]), "likes": _num(r[4]) or 0, "comments": _num(r[5]) or 0, "shares": _num(r[6]) or 0}
+        post = out.setdefault(r[1], {"link": r[2], "first": m})
+        post["last"] = m
+        post["link"] = r[2] or post["link"]
+    return out
+
+
+def _stat_values(st: dict) -> dict:
+    """מה לכתוב על שורת הפוסט: קישור למקורי, צפיות, תגובות, ועלייה באחוזים מאז המדידה הראשונה."""
+    first, last = st["first"], st["last"]
+    day = lambda d: f"{d[8:10]}.{d[5:7]}"
+    if last["views"] is None:
+        growth = "אין ספירת צפיות לפוסט הזה (לא ריל)"
+    elif first["date"] == last["date"] or not first["views"]:
+        growth = f"נמדד לראשונה ב-{day(last['date'])}: {last['views']} צפיות"
+    else:
+        pct = round((last["views"] - first["views"]) * 100 / first["views"])
+        growth = f"{'+' if pct >= 0 else ''}{pct}% ({first['views']} ב-{day(first['date'])} → {last['views']} ב-{day(last['date'])})"
+    return {"🔗 post link": st["link"], "👁️ views": "" if last["views"] is None else str(last["views"]),
+            "💬 interactions": str(last["likes"] + last["comments"] + last["shares"]), "📈 growth": growth}
+
+
+def _sheet_rows() -> list[dict]:
     out = []
-    for r in list(csv.reader(io.StringIO(text)))[1:]:
+    for r in _csv(SHARES_SHEET_ID):
         r = [c.strip() for c in (r + [""] * 6)[:6]]
         if r[0] and r[4]:
             out.append({"date": r[0], "time": r[1], "post": r[2], "group": r[3], "link": r[4], "pending": r[5].lower() in ("כן", "yes", "true", "1")})
@@ -101,13 +140,14 @@ PENDING = " (ממתין לאישור מנהל)"
 
 def _existing_posts(board_id: str, group_id: str) -> dict:
     """{שם הפוסט: {"id": ..., "subs": שמות תת-השורות שכבר רשומות}} בקבוצת 'פוסטים ושיתופים'."""
-    fields = "id name subitems { name }"
+    fields = "id name subitems { name } column_values { column { title } text }"
     q = "query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 100) { cursor items { %s } } } } }" % fields
     page = tools_monday._query(q, {"b": [board_id], "g": [group_id]}, "anycan")["boards"][0]["groups"][0]["items_page"]
     out = {}
     while True:
         for it in page["items"]:
-            out[it["name"]] = {"id": it["id"], "subs": {sub["name"].replace(PENDING, "") for sub in it.get("subitems") or []}}
+            out[it["name"]] = {"id": it["id"], "subs": {sub["name"].replace(PENDING, "") for sub in it.get("subitems") or []},
+                               "cols": {c["column"]["title"].strip().lower(): (c.get("text") or "") for c in it.get("column_values") or []}}
         if not page.get("cursor"):
             return out
         page = tools_monday._query("query ($c: String!) { next_items_page(cursor: $c, limit: 100) { cursor items { %s } } }" % fields,
@@ -117,9 +157,10 @@ def _existing_posts(board_id: str, group_id: str) -> dict:
 def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
     """מכניסה ל-monday של AnyCan (קבוצת 'פוסטים ושיתופים') את השיתופים של יוסי לקבוצות פייסבוק מתוך הגיליון 'שיתופים בפייסבוק'
     שבדרייב: שורה אחת לכל פוסט, ומתחתיה תת-שורה לכל קבוצה שהפוסט שותף אליה. שיתוף שכבר רשום לא נרשם שוב.
-    עד 60 שיתופים בכל פעם — אם נשארו, לבקש שוב. השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי' או 'המשך ייבוא'.
-    רץ לבד כל בוקר."""
-    need = ["📅 shared at", "👥 shared to"]
+    על שורת הפוסט נרשמים גם הקישור לפוסט המקורי, כמות הצפיות, ועלייה באחוזים מאז המדידה הראשונה (מגיליון המדידות היומי).
+    עד 60 שיתופים בכל פעם — אם נשארו, לבקש שוב. השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי', 'המשך ייבוא'
+    או 'תעדכני צפיות'. רץ לבד כל שעה."""
+    need = ["📅 shared at", "👥 shared to"] + STAT_COLS
     for attempt in range(2):
         board = _board()
         group = next((g for g in board["groups"] if g["title"].strip() == GROUP), None)
@@ -168,8 +209,22 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
         tools_monday._query(
             "mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }",
             {"b": board["id"], "i": posts[post]["id"], "v": json.dumps(values, ensure_ascii=False)}, "anycan")
+    updated = 0
+    if all(n in cols for n in STAT_COLS):  # צפיות, קישור למקורי ועלייה באחוזים — רק כשמשהו השתנה
+        for title, st in _original_stats().items():
+            post = posts.get(f"פייסבוק · {title}"[:250])
+            if not post:
+                continue
+            want = _stat_values(st)
+            if all(post.get("cols", {}).get(k, "") == v for k, v in want.items()):
+                continue
+            tools_monday._query(
+                "mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }",
+                {"b": board["id"], "i": post["id"], "v": json.dumps({cols[k]: v for k, v in want.items()}, ensure_ascii=False)}, "anycan")
+            updated += 1
+    stats = f" עודכנו צפיות ועלייה ב-{updated} פוסטים." if updated else ""
     return (f"נרשמו ב-monday {done} שיתופים מפייסבוק תחת {len(touched)} פוסטים (מתוך {len(rows)} שיתופים בגיליון)."
-            + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן."))
+            + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן.") + stats)
 
 
 POSTS_TOOLS = [setup_posts_tracking, log_post_share, import_facebook_shares]

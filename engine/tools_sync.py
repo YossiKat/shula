@@ -211,10 +211,24 @@ def sync_monday_and_calendar(preview: bool = False) -> str:
         _lock.release()
 
 
+def _import_shares() -> None:
+    try:
+        import tools_posts
+        for _ in range(20):  # עד 1,200 שיתופים חדשים בפעם אחת
+            out = tools_posts.import_facebook_shares()
+            log.info("facebook shares import: %s", out)
+            if "נשארו" not in out:
+                break
+    except Exception:
+        log.exception("facebook shares import failed")
+
+
 def daily_loop(check_every: int = 600) -> None:
-    """פעם ביום, אחרי SYNC_HOUR בבוקר (שעון ישראל). ביום שבו שולה הופעלה מחדש אחרי השעה הזו — מחכה למחר."""
+    """הסנכרון עם היומן: פעם ביום, אחרי SYNC_HOUR בבוקר (שעון ישראל); ביום שבו שולה הופעלה מחדש אחרי השעה הזו — מחכה למחר.
+    השיתופים והצפיות מפייסבוק: כל שעה (קריאת גיליון ועדכון monday, בלי AI) — כי Claude ממלא את הגיליון בשעה לא קבועה."""
     start = datetime.now(TZ)
     last = start.date() if start.hour >= SYNC_HOUR else None
+    last_hour = None
     while True:
         time.sleep(check_every)
         now = datetime.now(TZ)
@@ -224,15 +238,9 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("daily monday sync: %s", sync_monday_and_calendar().replace("\n", " | "))
             except Exception:
                 log.exception("daily monday sync failed")
-            try:
-                import tools_posts
-                for _ in range(20):  # עד 1,200 שיתופים חדשים ביום
-                    out = tools_posts.import_facebook_shares()
-                    log.info("daily facebook shares import: %s", out)
-                    if "נשארו" not in out:
-                        break
-            except Exception:
-                log.exception("daily facebook shares import failed")
+        if last_hour != (now.date(), now.hour):
+            last_hour = (now.date(), now.hour)
+            _import_shares()
 
 
 SYNC_TOOLS = [sync_monday_and_calendar]
