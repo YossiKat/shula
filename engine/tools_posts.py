@@ -1,6 +1,9 @@
 """מעקב פוסטים ושיתופים ב-monday של AnyCan: קבוצה "פוסטים ושיתופים" בלוח AnyCan Ai,
 עם אותן עמודות שיש בלוח של Alpha Omega (חשיפה, צפיות, תגובות, הצעד האורגני הבא) ועוד עמודת הורדות."""
+import csv
+import io
 import json
+import os
 from datetime import datetime
 
 import tools_calendar
@@ -10,7 +13,11 @@ GROUP = "📣 פוסטים ושיתופים"
 COLUMNS = [  # (כותרת, סוג)
     ("📊 Reach", "numbers"), ("👁️ Views", "numbers"), ("💬 Interactions", "numbers"), ("⬇️ Downloads", "numbers"),
     ("🌱 Next organic step", "text"), ("⏰ Organic step at", "date"),
+    ("📅 Shared at", "date"), ("👥 Shared to", "text"), ("🔗 Post link", "text"),
 ]
+# גיליון בדרייב של יוסי עם השיתופים שלו בפייסבוק (Claude ממלא אותו מיומן הפעילות): תאריך, שעה, פוסט, קבוצה, קישור, ממתין
+SHARES_SHEET_ID = os.environ.get("FB_SHARES_SHEET_ID", "10pFuwwS7KQXY4-DIAYiIeqKq88pWESQ_e7PKMIi27fY")
+IMPORT_BATCH = 60
 
 
 def _board() -> dict:
@@ -77,4 +84,69 @@ def log_post_share(title: str, platform: str = "", shared_to: str = "", link: st
     return f"נרשם ב-monday (פוסטים ושיתופים): {name}"
 
 
-POSTS_TOOLS = [setup_posts_tracking, log_post_share]
+def _sheet_rows() -> list[dict]:
+    import google_auth
+    raw = google_auth.service("drive", "v3", google_auth.MAIN).files().export(fileId=SHARES_SHEET_ID, mimeType="text/csv").execute()
+    text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+    out = []
+    for r in list(csv.reader(io.StringIO(text)))[1:]:
+        r = [c.strip() for c in (r + [""] * 6)[:6]]
+        if r[0] and r[4]:
+            out.append({"date": r[0], "time": r[1], "post": r[2], "group": r[3], "link": r[4], "pending": r[5].lower() in ("כן", "yes", "true", "1")})
+    return out
+
+
+def _existing_links(board_id: str, group_id: str, link_col: str) -> set:
+    """הקישורים שכבר רשומים בקבוצת 'פוסטים ושיתופים' — כדי לא לרשום שיתוף פעמיים."""
+    q = ("query ($b: [ID!], $g: [String!]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 500) { cursor items { "
+         "column_values(ids: [\"%s\"]) { text } } } } } }" % link_col)
+    page = tools_monday._query(q, {"b": [board_id], "g": [group_id]}, "anycan")["boards"][0]["groups"][0]["items_page"]
+    seen = set()
+    while True:
+        for it in page["items"]:
+            seen.update(c["text"] for c in it["column_values"] if c.get("text"))
+        if not page.get("cursor"):
+            return seen
+        page = tools_monday._query(
+            "query ($c: String!) { next_items_page(cursor: $c, limit: 500) { cursor items { column_values(ids: [\"%s\"]) { text } } } }" % link_col,
+            {"c": page["cursor"]}, "anycan")["next_items_page"]
+
+
+def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
+    """מכניסה ל-monday של AnyCan (קבוצת 'פוסטים ושיתופים') את השיתופים של יוסי לקבוצות פייסבוק, שורה לכל שיתוף,
+    מתוך הגיליון 'שיתופים בפייסבוק' שבדרייב. שיתוף שכבר רשום לא נרשם שוב. עד 60 בכל פעם — אם נשארו, לבקש שוב.
+    השתמשי כשיוסי מבקש 'תכניסי את השיתופים מפייסבוק למנדיי' או 'המשך ייבוא'. רץ לבד כל בוקר."""
+    need = ["📅 shared at", "👥 shared to", "🔗 post link"]
+    for attempt in range(2):
+        board = _board()
+        group = next((g for g in board["groups"] if g["title"].strip() == GROUP), None)
+        cols = {c["title"].strip().lower(): c["id"] for c in board["columns"]}
+        if group and all(n in cols for n in need):
+            break
+        if attempt == 0:
+            setup_posts_tracking()  # יוצרת את מה שחסר (קבוצה או עמודות)
+    else:
+        return "לא הצלחתי להכין את הקבוצה והעמודות בלוח AnyCan Ai."
+    rows = _sheet_rows()
+    seen = _existing_links(board["id"], group["id"], cols["🔗 post link"])
+    todo = [r for r in rows if r["link"] not in seen]
+    done = 0
+    for r in todo[:max(1, min(int(limit), 200))]:
+        values = {cols["👥 shared to"]: r["group"][:250], cols["🔗 post link"]: r["link"]}
+        try:
+            datetime.strptime(r["date"], "%Y-%m-%d")
+            values[cols["📅 shared at"]] = {"date": r["date"]}
+        except ValueError:
+            pass
+        name = f"פייסבוק · {r['post'] or 'פוסט'} · {r['group']}" + (" (ממתין לאישור מנהל)" if r["pending"] else "")
+        tools_monday._query(
+            "mutation ($b: ID!, $g: String!, $n: String!, $v: JSON) { create_item(board_id: $b, group_id: $g, item_name: $n, column_values: $v) { id } }",
+            {"b": board["id"], "g": group["id"], "n": name[:250], "v": json.dumps(values, ensure_ascii=False)}, "anycan")
+        seen.add(r["link"])
+        done += 1
+    left = len(todo) - done
+    return (f"נרשמו ב-monday {done} שיתופים מפייסבוק (מתוך {len(rows)} בגיליון)."
+            + (f" נשארו עוד {left} — בקש 'המשך ייבוא'." if left else " הכול מעודכן."))
+
+
+POSTS_TOOLS = [setup_posts_tracking, log_post_share, import_facebook_shares]

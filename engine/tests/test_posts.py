@@ -22,7 +22,7 @@ def _fake(monkeypatch, columns=(), groups=()):
 def test_setup_creates_only_what_is_missing(monkeypatch):
     calls = _fake(monkeypatch, columns=[{"id": "v", "title": "👁️ Views", "type": "numbers"}])
     out = tools_posts.setup_posts_tracking()
-    assert [c[0] for c in calls] == ["create_column"] * 5 + ["create_group"]
+    assert [c[0] for c in calls] == ["create_column"] * (len(tools_posts.COLUMNS) - 1) + ["create_group"]
     assert "👁️ Views" not in out and "⬇️ Downloads" in out and calls[-1][1]["n"] == tools_posts.GROUP
     full = [{"id": str(i), "title": t, "type": k} for i, (t, k) in enumerate(tools_posts.COLUMNS)]
     calls = _fake(monkeypatch, columns=full, groups=[{"id": "g1", "title": tools_posts.GROUP}])
@@ -46,3 +46,28 @@ def test_share_is_logged_as_a_row_in_the_posts_group(monkeypatch):
 def test_share_before_setup_explains(monkeypatch):
     calls = _fake(monkeypatch)
     assert "עדיין לא הוכן" in tools_posts.log_post_share("פוסט") and calls == []
+
+
+def test_facebook_shares_are_imported_one_row_each_and_never_twice(monkeypatch):
+    cols = [{"id": "at", "title": "📅 Shared at", "type": "date"}, {"id": "to", "title": "👥 Shared to", "type": "text"},
+            {"id": "ln", "title": "🔗 Post link", "type": "text"}]
+    sheet = [{"date": "2026-11-12", "time": "12:34", "post": "העוזר החדש", "group": "Parkinson's Warriors", "link": "https://fb/1", "pending": False},
+             {"date": "2026-11-12", "time": "12:33", "post": "העוזר החדש", "group": "DBS Surgery", "link": "https://fb/2", "pending": True},
+             {"date": "2026-11-11", "time": "21:58", "post": "הכירו את aCare Home", "group": "Leven met Parkinson", "link": "https://fb/3", "pending": False}]
+    calls = _fake(monkeypatch, columns=cols, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    monkeypatch.setattr(tools_posts, "_sheet_rows", lambda: sheet)
+    monkeypatch.setattr(tools_posts, "_existing_links", lambda b, g, c: {"https://fb/3"})
+    out = tools_posts.import_facebook_shares(limit=1)
+    assert "נרשמו ב-monday 1" in out and "נשארו עוד 1" in out
+    assert calls[0][1]["n"] == "פייסבוק · העוזר החדש · Parkinson's Warriors"
+    assert json.loads(calls[0][1]["v"]) == {"to": "Parkinson's Warriors", "ln": "https://fb/1", "at": {"date": "2026-11-12"}}
+    calls.clear()
+    monkeypatch.setattr(tools_posts, "_existing_links", lambda b, g, c: {"https://fb/3", "https://fb/1"})
+    out = tools_posts.import_facebook_shares()
+    assert len(calls) == 1 and calls[0][1]["n"].endswith("DBS Surgery (ממתין לאישור מנהל)") and "הכול מעודכן" in out
+
+
+def test_import_prepares_missing_columns_first(monkeypatch):
+    calls = _fake(monkeypatch, groups=[{"id": "g1", "title": tools_posts.GROUP}])
+    out = tools_posts.import_facebook_shares()
+    assert [c[0] for c in calls] == ["create_column"] * len(tools_posts.COLUMNS) and "לא הצלחתי" in out

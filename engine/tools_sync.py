@@ -224,6 +224,15 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("daily monday sync: %s", sync_monday_and_calendar().replace("\n", " | "))
             except Exception:
                 log.exception("daily monday sync failed")
+            try:
+                import tools_posts
+                for _ in range(20):  # עד 1,200 שיתופים חדשים ביום
+                    out = tools_posts.import_facebook_shares()
+                    log.info("daily facebook shares import: %s", out)
+                    if "נשארו" not in out:
+                        break
+            except Exception:
+                log.exception("daily facebook shares import failed")
 
 
 SYNC_TOOLS = [sync_monday_and_calendar]
