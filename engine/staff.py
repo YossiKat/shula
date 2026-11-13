@@ -147,3 +147,93 @@ def log_to_department(department: str, title: str, details: str = "") -> str:
 
 
 STAFF_TOOLS = [log_to_department]
+
+
+# ---- דו"ח המודיעין היומי → תוכנית עבודה ב-monday ----
+import json
+import re
+
+INTEL_SUBJECT = 'דו"ח מודיעין יומי'
+_NAMES = {d["name"]: k for k, d in DEPARTMENTS.items()}
+_ACTION = re.compile(r"^\W*(" + "|".join(_NAMES) + r")\s*:\s*(.+)$")
+_URGENT = {"דחוף": "🔴 דחוף", "גבוהה": "🔴 דחוף", "חשוב": "🟠 חשוב", "בינונית": "🟠 חשוב", "רגיל": "🟢 רגיל", "נמוכה": "🟢 רגיל"}
+INTEL_COLS = (("🔥 דחיפות", "status"), ("📅 תאריך יעד", "date"), ("🧬 מקור", "text"))
+
+
+def parse_intel_actions(text: str, year: int) -> list:
+    """מוציאה מהדוח את שורות הפעולות: 'שירי: לעשות X | דחיפות: גבוהה | עד: 18.11'."""
+    out = []
+    for line in (text or "").splitlines():
+        m = _ACTION.match(line.strip())
+        if not m:
+            continue
+        parts = [p.strip() for p in m.group(2).split("|")]
+        act = {"dept": _NAMES[m.group(1)], "title": parts[0][:200], "urgency": "🟠 חשוב", "due": ""}
+        for p in parts[1:]:
+            if p.startswith("דחיפות"):
+                word = p.split(":", 1)[-1].strip()
+                act["urgency"] = next((v for k, v in _URGENT.items() if k in word), act["urgency"])
+            elif p.startswith("עד"):
+                d = re.search(r"(\d{1,2})[./](\d{1,2})", p)
+                if d:
+                    act["due"] = f"{year}-{int(d.group(2)):02d}-{int(d.group(1)):02d}"
+        if act["title"]:
+            out.append(act)
+    return out
+
+
+def _cols(board: dict) -> dict:
+    data = tools_monday._query("query ($ids: [ID!]) { boards(ids: $ids) { columns { id title type } } }",
+                               {"ids": [board["id"]]}, "anycan")["boards"][0]["columns"]
+    have = {c["title"].strip(): c["id"] for c in data}
+    ids = {}
+    for title, kind in INTEL_COLS:
+        ids[title] = have.get(title) or tools_monday._query(
+            "mutation ($b: ID!, $t: String!, $k: ColumnType!) { create_column(board_id: $b, title: $t, column_type: $k) { id } }",
+            {"b": board["id"], "t": title, "k": kind}, "anycan")["create_column"]["id"]
+    return ids
+
+
+def _names_in_group(board_id: str, group_id: str) -> set:
+    data = tools_monday._query(
+        "query ($b: [ID!], $g: [String]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 500) { items { name } } } } }",
+        {"b": [board_id], "g": [group_id]}, "anycan")
+    groups = data["boards"][0].get("groups") or []
+    return {it["name"].strip() for g in groups for it in g["items_page"]["items"]}
+
+
+def import_intel_actions(days: int = 2) -> str:
+    """לוקחת את הפעולות מ'דו"ח מודיעין יומי' האחרון במייל ופותחת אותן כתוכנית עבודה ב-monday של AnyCan:
+    כל פעולה נכנסת לקבוצה של המחלקה שלה (שירי, רעיה, חסיה...) עם דחיפות, תאריך יעד ומקור. פעולה שכבר קיימת לא נפתחת שוב.
+    רץ לבד כל ערב אחרי שהדוח מגיע. השתמשי כשיוסי מבקש 'תכניסי את הדוח למנדיי' או 'תפתחי תוכנית עבודה מהמודיעין'."""
+    import tools_gmail
+    from datetime import date
+    found = tools_gmail.search_emails(f'subject:"{INTEL_SUBJECT}" newer_than:{int(days)}d', max_results=3, account="gmail")
+    ids = re.findall(r"^\[([^\]]+)\]", found, flags=re.M)
+    if not ids:
+        return "אין דו\"ח מודיעין חדש."
+    text = tools_gmail.read_email(ids[0])
+    when = re.search(r"נושא:.*?(\d{2}\.\d{2}\.\d{4})", text)
+    acts = parse_intel_actions(text, date.today().year)
+    if not acts:
+        return "בדוח האחרון לא מצאתי שורות פעולה."
+    board = _board()
+    cols = _cols(board)
+    made = []
+    for a in acts:
+        d = DEPARTMENTS[a["dept"]]
+        gid = _group_id(board, d["group"])
+        name = f"🧬 {a['title']}"[:250]
+        if name in _names_in_group(board["id"], gid):
+            continue
+        values = {cols["🔥 דחיפות"]: {"label": a["urgency"]}, cols["🧬 מקור"]: f"{INTEL_SUBJECT} {when.group(1) if when else ''}".strip()}
+        if a["due"]:
+            values[cols["📅 תאריך יעד"]] = {"date": a["due"]}
+        tools_hub._create(board["id"], gid, name, values, "anycan")
+        made.append(f"{d['emoji']} {d['name']}: {a['title']} ({a['urgency']})")
+    if not made:
+        return "כל הפעולות מהדוח כבר נמצאות ב-monday."
+    return "נפתחו ב-monday " + str(len(made)) + " משימות מהמודיעין:\n" + "\n".join(made)
+
+
+STAFF_TOOLS.append(import_intel_actions)
