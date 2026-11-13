@@ -60,3 +60,11 @@ def test_new_roles_route():
 
 def test_shula_knows_the_daily_intel_report():
     assert "דו\"ח מודיעין יומי" in staff.roster_text()
+
+
+def test_parse_intel_actions():
+    text = "3. פעולות\n📣 שירי: לבדוק את הקמפיין של Rune Labs | דחיפות: גבוהה | עד: 18.11\n🧠 רעיה: לבדוק כלי חדש\nסתם שורה"
+    acts = staff.parse_intel_actions(text, 2026)
+    assert acts[0] == {"dept": "cmo", "title": "לבדוק את הקמפיין של Rune Labs", "urgency": "🔴 דחוף", "due": "2026-11-18"}
+    assert acts[1]["dept"] == "cto" and acts[1]["urgency"] == "🟠 חשוב" and acts[1]["due"] == ""
+    assert len(acts) == 2

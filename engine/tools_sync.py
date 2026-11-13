@@ -245,6 +245,12 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("alpha omega two-way sync: %s", tools_hub.sync_content_hub())
             except Exception:
                 log.exception("content hub sync failed")
+            if now.hour >= 17:  # דו"ח המודיעין היומי מגיע ב-17:22 → תוכנית עבודה ב-monday
+                try:
+                    import staff
+                    log.info("intel → monday: %s", staff.import_intel_actions().replace("\n", " | "))
+                except Exception:
+                    log.exception("intel import failed")
 
 
 SYNC_TOOLS = [sync_monday_and_calendar]
