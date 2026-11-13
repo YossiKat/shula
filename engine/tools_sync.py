@@ -21,17 +21,20 @@ PAST_DAYS = 7          # תאריכים ישנים יותר לא נכנסים ל
 MAX_UPDATES = 20       # הגנה: לא יותר מ-20 עדכונים ל-monday בריצה אחת
 DONE_WORDS = {"done", "בוצע", "הושלם", "סגור", "closed", "completed"}
 TAG = "shula_monday"   # סימון על אירוע שנוצר מה-monday
+BOARD_TAG = "shula_board"  # מאיזה לוח הגיע האירוע
+POST_DATE = {"Publish Date"}  # בלוח הפוסטים נכנס ליומן רק תאריך הפרסום
 LOGGED = "monday_logged"  # סימון על פגישה שכבר נרשמה ב-monday
 _lock = threading.Lock()
 
 
-def _board_items() -> tuple[dict, list]:
+def _board_items(name: str = "") -> tuple[dict, list]:
     """(הלוח, כל הפריטים שלו) מה-monday של AnyCan."""
-    want = SYNC_BOARD.strip().lower()
+    name = name or SYNC_BOARD
+    want = name.strip().lower()
     boards = tools_monday._anycan_boards()
     match = [b for b in boards if b["name"].strip().lower() == want] or [b for b in boards if want in b["name"].lower()]
     if not match:
-        raise RuntimeError(f"לא מצאתי את הלוח '{SYNC_BOARD}' ב-monday של AnyCan")
+        raise RuntimeError(f"לא מצאתי את הלוח '{name}' ב-monday של AnyCan")
     board = match[0]
     cols = "id name group { title } column_values { id type text value column { title } }"
     data = tools_monday._query(
@@ -53,14 +56,15 @@ def _is_done(item: dict) -> bool:
                for c in item["column_values"])
 
 
-def _wanted_events(board: dict, items: list, today) -> dict:
-    """{מפתח: אירוע יומן} לכל תאריך בלוח, מ-PAST_DAYS ימים אחורה והלאה."""
+def _wanted_events(board: dict, items: list, today, only: set | None = None) -> dict:
+    """{מפתח: אירוע יומן} לכל תאריך בלוח, מ-PAST_DAYS ימים אחורה והלאה.
+    only = שמות עמודות התאריך שנכנסות (בלוח הפוסטים: רק תאריך הפרסום)."""
     out = {}
     for it in items:
         status = "; ".join(f"{c['column']['title']}: {c['text']}" for c in it["column_values"]
                            if c.get("type") == "status" and c.get("text"))
         for c in it["column_values"]:
-            if c.get("type") != "date" or not c.get("value"):
+            if c.get("type") != "date" or not c.get("value") or (only and c["column"]["title"] not in only):
                 continue
             try:
                 val = json.loads(c["value"])
@@ -71,11 +75,11 @@ def _wanted_events(board: dict, items: list, today) -> dict:
                 continue
             key = f"{it['id']}:{c['id']}"
             ev = {
-                "summary": f"📋 {it['name']} · {c['column']['title']}",
+                "summary": f"📣 פוסט · {it['name']}" if only else f"📋 {it['name']} · {c['column']['title']}",
                 "description": (f"מה-monday של AnyCan, לוח {board['name']}, קבוצה {it['group']['title']}.\n"
                                 + (status + "\n" if status else "")
                                 + f"https://{board['slug']}.monday.com/boards/{board['id']}/pulses/{it['id']}"),
-                "extendedProperties": {"private": {TAG: key}},
+                "extendedProperties": {"private": {TAG: key, BOARD_TAG: str(board["id"])}},
             }
             if val.get("time"):  # ב-monday השעה נשמרת ב-UTC
                 start = datetime.strptime(f"{val['date']} {val['time']}", "%Y-%m-%d %H:%M:%S")
@@ -108,13 +112,17 @@ def _same(old: dict, new: dict) -> bool:
             and old.get("description") == new["description"] and old.get("colorId") == new.get("colorId"))
 
 
-def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool = False) -> list:
-    wanted = _wanted_events(board, items, now.date())
+def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool = False,
+                        only: set | None = None, main: bool = True) -> list:
+    """main = הלוח הראשי (אירועים ישנים בלי סימון לוח שייכים לו); כל לוח מוחק רק אירועים שלו."""
+    wanted = _wanted_events(board, items, now.date(), only)
     svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
     existing = {}
     for e in _list(privateExtendedProperty=f"{TAG}_on=1", showDeleted=False,
                    timeMin=(now - timedelta(days=PAST_DAYS + 1)).isoformat()):
-        existing[e["extendedProperties"]["private"][TAG]] = e
+        private = e["extendedProperties"]["private"]
+        if private.get(BOARD_TAG, str(board["id"]) if main else "") == str(board["id"]):
+            existing[private[TAG]] = e
     if preview:
         new = sorted((ev["start"].get("date") or ev["start"]["dateTime"][:10], ev["summary"])
                      for key, ev in wanted.items() if key not in existing)
@@ -210,6 +218,15 @@ def sync_monday_and_calendar(preview: bool = False) -> str:
         _lock.release()
 
 
+def sync_posts_calendar(preview: bool = False) -> str:
+    """תאריכי הפרסום של הפוסטים (עמודת Publish Date בלוח הפוסטים ב-monday של AnyCan) ביומן 'יוסי קט' —
+    אירוע 'פוסט' לכל יום פרסום; כשתאריך זז או נמחק ב-monday, האירוע זז או נמחק. רץ לבד כל שעה.
+    השתמשי כשיוסי שואל אם תאריכי הפוסטים ביומן מעודכנים או מבקש לסנכרן אותם."""
+    import tools_posts
+    board, items = _board_items(tools_posts.POSTS_BOARD)
+    return "\n".join(_monday_to_calendar(board, items, datetime.now(TZ), preview, only=POST_DATE, main=False))
+
+
 def _import_shares() -> None:
     try:
         import tools_posts
@@ -245,6 +262,10 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("alpha omega two-way sync: %s", tools_hub.sync_content_hub())
             except Exception:
                 log.exception("content hub sync failed")
+            try:
+                log.info("post dates calendar: %s", sync_posts_calendar())
+            except Exception:
+                log.exception("post dates calendar sync failed")
 
 
-SYNC_TOOLS = [sync_monday_and_calendar]
+SYNC_TOOLS = [sync_monday_and_calendar, sync_posts_calendar]
