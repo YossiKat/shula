@@ -36,9 +36,10 @@ def test_log_creates_missing_group_then_item(monkeypatch):
     monkeypatch.setattr(tools_hub, "_create", lambda b, g, n, v, a: made.append((b, g, n)) or "99")
 
     out = staff.log_to_department("home", "הוצאה 21₪ – בית הלחם", "09:00")
-    assert made == [("7", "gnew", "הוצאה 21₪ – בית הלחם")]
+    assert made[0] == ("7", "gnew", "הוצאה 21₪ – בית הלחם")
+    assert made[1][2] == "↗️ עדכון מבתיה: הוצאה 21₪ – בית הלחם"  # בתיה מעדכנת את מוני
     assert "create_group" in calls and "create_update" in calls
-    assert "בתיה" in out
+    assert "בתיה" in out and "מוני" in out
 
     made.clear()
     staff.log_to_department("admin", "נשלח מייל לקאי")
@@ -47,3 +48,11 @@ def test_log_creates_missing_group_then_item(monkeypatch):
 
 def test_unknown_department_is_refused():
     assert "לא מוכרת" in staff.log_to_department("xyz", "x")
+
+
+def test_new_roles_route():
+    assert staff.route("תזמיני לי מקום במסעדה") == "admin"
+    assert staff.route("מה עם התזרים החודש") == "cfo"
+    assert staff.route("מה אכלתי היום ואיך האימון") == "personal"
+    assert staff.route("מצאתי כלי חדש למפתחים") == "cto"
+    assert "בעיקר ולא בטפל" in staff.roster_text()
