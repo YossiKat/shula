@@ -192,3 +192,25 @@ def test_preview_writes_nothing(monkeypatch):
 def test_live_sync_without_the_alpha_omega_key_explains(monkeypatch):
     monkeypatch.delenv("MONDAY_API_TOKEN", raising=False)
     assert "MONDAY_API_TOKEN" in tools_hub.sync_content_hub()
+
+
+def test_a_rejected_value_does_not_stop_the_sync(monkeypatch):
+    mine = [_row("a1", "פוסט", "gposts", date="2026-11-17", status="Draft"),
+            _row("a2", "פוסט נוסף", "gposts", date="2026-11-20", status="Draft"),
+            _row("a3", "Captain Steady", "ghub", ao_id="111", date="2026-11-18", status="Draft")]
+    hub = [_hubitem("111", "Captain Steady", date="2026-07-03", status="Waiting")]
+    calls = _two_way(monkeypatch, mine, hub)
+    real = tools_monday._query
+
+    def picky(gql, v, account="alphaomega"):
+        vals = json.loads(v.get("v") or "{}") if isinstance(v.get("v"), str) else {}
+        if account == "alphaomega" and vals.get("status") == {"label": "Draft"}:
+            raise RuntimeError("label Draft not allowed")
+        return real(gql, v, account)
+    monkeypatch.setattr(tools_monday, "_query", picky)
+    out = tools_hub.sync_content_hub()
+    ao_writes = [json.loads(c[1]["v"]) for c in calls if c[2] == "alphaomega" and c[0] in ("create_item", "change_multiple_column_values")]
+    # שני הפוסטים נוצרו, התאריכים נכתבו אחד-אחד, והתאריך של Captain Steady עבר — רק הסטטוס נדחה
+    assert sum(1 for c in calls if c[0] == "create_item" and c[2] == "alphaomega") >= 2
+    assert {"date4": {"date": "2026-11-17"}} in ao_writes and {"date4": {"date": "2026-11-18"}} in ao_writes
+    assert "נכשלו" not in out and "2 חדשים באלפא אומגה, 1 פריטים עודכנו" in out

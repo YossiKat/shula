@@ -5,12 +5,15 @@ Claude מוריד את הפריטים מהלוח של Alpha Omega לגיליון
 כשיש מפתח של אלפא אומגה, sync_content_hub קוראת ישר מהלוח שלהם כל שעה ומעדכנת חדשים ושינויים."""
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
 
 import tools_monday
 import tools_posts
+
+log = logging.getLogger("shula.hub")
 
 HUB_SHEET_ID = os.environ.get("AO_HUB_SHEET_ID", "1aSty9zdBdnld_chuhNmDJ8EDI0QWWQwoSczArDPRWeE")
 HUB_GROUP = "🎬 Content Hub (מאלפא אומגה)"
@@ -249,18 +252,40 @@ def _merge(fields: dict, an: dict, ao: dict, state: dict) -> tuple[dict, dict, d
     return to_an, to_ao, new
 
 
-def _set(board_id: str, item_id: str, values: dict, account: str) -> None:
-    tools_monday._query(
-        "mutation ($b: ID!, $i: ID!, $v: JSON!) "
-        "{ change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v, create_labels_if_missing: true) { id } }",
-        {"b": board_id, "i": item_id, "v": json.dumps(values, ensure_ascii=False)}, account)
+def _set(board_id: str, item_id: str, values: dict, account: str) -> list:
+    """כותבת את כל הערכים; אם monday דוחה, כותבת אחד-אחד ומדלגת על מה שנדחה. מחזירה את העמודות שנדחו."""
+    q = ("mutation ($b: ID!, $i: ID!, $v: JSON!) "
+         "{ change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v, create_labels_if_missing: true) { id } }")
+    try:
+        tools_monday._query(q, {"b": board_id, "i": item_id, "v": json.dumps(values, ensure_ascii=False)}, account)
+        return []
+    except RuntimeError as e:
+        if len(values) < 2:
+            log.warning("monday rejected %s on %s: %s", list(values), item_id, str(e)[:200])
+            return list(values)
+    bad = []
+    for k, v in values.items():
+        try:
+            tools_monday._query(q, {"b": board_id, "i": item_id, "v": json.dumps({k: v}, ensure_ascii=False)}, account)
+        except RuntimeError as e:
+            log.warning("monday rejected column %s on %s: %s", k, item_id, str(e)[:200])
+            bad.append(k)
+    return bad
 
 
 def _create(board_id: str, group_id: str, name: str, values: dict, account: str) -> str:
-    return tools_monday._query(
-        "mutation ($b: ID!, $g: String!, $n: String!, $v: JSON) "
-        "{ create_item(board_id: $b, group_id: $g, item_name: $n, column_values: $v, create_labels_if_missing: true) { id } }",
-        {"b": board_id, "g": group_id, "n": (name or "פריט")[:250], "v": json.dumps(values, ensure_ascii=False)}, account)["create_item"]["id"]
+    q = ("mutation ($b: ID!, $g: String!, $n: String!, $v: JSON) "
+         "{ create_item(board_id: $b, group_id: $g, item_name: $n, column_values: $v, create_labels_if_missing: true) { id } }")
+    try:
+        return tools_monday._query(q, {"b": board_id, "g": group_id, "n": (name or "פריט")[:250],
+                                       "v": json.dumps(values, ensure_ascii=False)}, account)["create_item"]["id"]
+    except RuntimeError as e:
+        if not values:
+            raise
+        log.warning("create with values failed, creating bare and filling one by one: %s", str(e)[:200])
+    new_id = tools_monday._query(q, {"b": board_id, "g": group_id, "n": (name or "פריט")[:250], "v": "{}"}, account)["create_item"]["id"]
+    _set(board_id, new_id, values, account)
+    return new_id
 
 
 def _fields(board: dict, ids: dict) -> dict:
@@ -364,7 +389,7 @@ def _sync(limit: int, preview: bool) -> str:
     ao = {it["id"]: it for it in hub}
     ao.update(_ao_by_ids([i for i in paired if i not in ao]))
 
-    added = sent = changed = marked = writes = 0
+    added = sent = changed = marked = writes = failed = 0
     ao_groups = None
     # 1. חדש באלפא אומגה → אצל יוסי
     for ao_id, it in ao.items():
@@ -375,7 +400,12 @@ def _sync(limit: int, preview: bool) -> str:
         values.update({k: v for k, v in to_an.items() if v not in ({}, "")})
         values[state_col] = {"text": json.dumps(state)}
         if not preview:
-            _create(board["id"], group, it["name"], values, "anycan")
+            try:
+                _create(board["id"], group, it["name"], values, "anycan")
+            except Exception:
+                log.exception("could not add %s to AnyCan", ao_id)
+                failed += 1
+                continue
         added += 1
         writes += 1
     # 2. חדש אצל יוסי → באלפא אומגה, בקבוצה באותו שם
@@ -383,20 +413,25 @@ def _sync(limit: int, preview: bool) -> str:
         if writes >= limit:
             break
         if not preview:
-            if ao_groups is None:
-                ao_groups = {g["title"].strip(): g["id"] for g in tools_monday._query(
-                    "query ($b: [ID!]) { boards(ids: $b) { groups { id title } } }", {"b": [AO_BOARD]}, "alphaomega")["boards"][0]["groups"]}
-            title = it["group"]["title"].strip()
-            gid = AO_GROUP if it["group"]["id"] == group else ao_groups.get(title)
-            if not gid:
-                gid = tools_monday._query("mutation ($b: ID!, $n: String!) { create_group(board_id: $b, group_name: $n) { id } }",
-                                          {"b": AO_BOARD, "n": title}, "alphaomega")["create_group"]["id"]
-                ao_groups[title] = gid
-            _, to_ao, state = _merge(fields, it, {"name": "", "column_values": []}, {})
-            new_id = _create(AO_BOARD, gid, it["name"], {k: v for k, v in to_ao.items() if k != "name" and v not in ({}, "")}, "alphaomega")
-            _set(board["id"], it["id"], {id_col: new_id, state_col: {"text": json.dumps(state)}}, "anycan")
-            paired[new_id] = it
-            fresh.add(new_id)
+            try:
+                if ao_groups is None:
+                    ao_groups = {g["title"].strip(): g["id"] for g in tools_monday._query(
+                        "query ($b: [ID!]) { boards(ids: $b) { groups { id title } } }", {"b": [AO_BOARD]}, "alphaomega")["boards"][0]["groups"]}
+                title = it["group"]["title"].strip()
+                gid = AO_GROUP if it["group"]["id"] == group else ao_groups.get(title)
+                if not gid:
+                    gid = tools_monday._query("mutation ($b: ID!, $n: String!) { create_group(board_id: $b, group_name: $n) { id } }",
+                                              {"b": AO_BOARD, "n": title}, "alphaomega")["create_group"]["id"]
+                    ao_groups[title] = gid
+                _, to_ao, state = _merge(fields, it, {"name": "", "column_values": []}, {})
+                new_id = _create(AO_BOARD, gid, it["name"], {k: v for k, v in to_ao.items() if k != "name" and v not in ({}, "")}, "alphaomega")
+                _set(board["id"], it["id"], {id_col: new_id, state_col: {"text": json.dumps(state)}}, "anycan")
+                paired[new_id] = it
+                fresh.add(new_id)
+            except Exception:
+                log.exception("could not send %s to Alpha Omega", it["id"])
+                failed += 1
+                continue
         sent += 1
         writes += 1
     # 3. פריטים משותפים — שדה-שדה
@@ -423,18 +458,28 @@ def _sync(limit: int, preview: bool) -> str:
         if not (to_an or to_ao) and new == state:
             continue
         if not preview:
-            if to_ao:
-                _set(AO_BOARD, ao_id, to_ao, "alphaomega")
-            _set(board["id"], it["id"], {**to_an, sync_col: other["updated_at"], state_col: {"text": json.dumps(new)}}, "anycan")
+            try:
+                if to_ao:
+                    _set(AO_BOARD, ao_id, to_ao, "alphaomega")
+                _set(board["id"], it["id"], {**to_an, sync_col: other["updated_at"], state_col: {"text": json.dumps(new)}}, "anycan")
+            except Exception:
+                log.exception("could not sync %s <-> %s", it["id"], ao_id)
+                failed += 1
+                continue
         if to_an or to_ao:
             changed += 1
         writes += 1
-    copied = _copy_updates(pairs, MAX_UPDATES, preview) if pairs else 0
+    try:
+        copied = _copy_updates(pairs, MAX_UPDATES, preview) if pairs else 0
+    except Exception:
+        log.exception("copying updates failed")
+        copied = 0
     head = "תצוגה מקדימה (לא נכתב כלום): " if preview else ""
     if not (added or sent or changed or marked or copied):
         return head + "שני הלוחות מסונכרנים — אין שינויים."
     return (head + f"סנכרון עם אלפא אומגה: {added} חדשים אצלך, {sent} חדשים באלפא אומגה, {changed} פריטים עודכנו, "
             f"{copied} עדכונים הועתקו, {marked} סומנו כנמחקים באלפא אומגה."
+            + (f" {failed} פריטים נכשלו וינוסו שוב בשעה הבאה." if failed else "")
             + (" נשארו עוד שינויים — ימשיכו בשעה הבאה." if writes >= limit else ""))
 
 
