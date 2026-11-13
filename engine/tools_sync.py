@@ -242,7 +242,7 @@ def daily_loop(check_every: int = 600) -> None:
             _import_shares()
             try:
                 import tools_hub
-                log.info("content hub sync: %s", tools_hub.sync_content_hub())
+                log.info("alpha omega two-way sync: %s", tools_hub.sync_content_hub())
             except Exception:
                 log.exception("content hub sync failed")
 
