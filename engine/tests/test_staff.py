@@ -56,3 +56,7 @@ def test_new_roles_route():
     assert staff.route("מה אכלתי היום ואיך האימון") == "personal"
     assert staff.route("מצאתי כלי חדש למפתחים") == "cto"
     assert "בעיקר ולא בטפל" in staff.roster_text()
+
+
+def test_shula_knows_the_daily_intel_report():
+    assert "דו\"ח מודיעין יומי" in staff.roster_text()
