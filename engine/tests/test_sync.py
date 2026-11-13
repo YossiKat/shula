@@ -133,3 +133,28 @@ def test_preview_shows_what_would_happen_and_writes_nothing(monkeypatch):
     out = tools_sync.sync_monday_and_calendar(preview=True)
     assert "לא נכתב כלום" in out and "📋 Mayo Clinic · Follow up" in out and "יירשם ב-monday על Mayo Clinic" in out
     assert cal.calls == [] and updates == []
+
+
+def _post(id, name, date=None):
+    cols = [{"id": "pd", "type": "date", "text": date or "", "column": {"title": "Publish Date"},
+             "value": ('{"date":"%s"}' % date) if date else None},
+            {"id": "org", "type": "date", "text": SOON, "column": {"title": "⏰ Organic step at"}, "value": '{"date":"%s"}' % SOON}]
+    return {"id": id, "name": name, "group": {"title": "Content Hub"}, "column_values": cols}
+
+
+def test_post_publish_dates_follow_monday_and_leave_other_boards_alone(monkeypatch):
+    other = {"id": "o1", "summary": "📋 Mayo Clinic · Follow up", "start": {"date": SOON},
+             "extendedProperties": {"private": {tools_sync.TAG: "1:date4", f"{tools_sync.TAG}_on": "1"}}}
+    cal = FakeCalendar([other])
+    monkeypatch.setattr(tools_calendar, "_svc", lambda: cal)
+    posts = [_post("p1", "Captain Steady", SOON), _post("p2", "בלי תאריך")]
+    monkeypatch.setattr(tools_sync, "_board_items", lambda name="": ({"id": "88", "name": "Social media schedule", "slug": "anycan-team"}, posts))
+    out = tools_sync.sync_posts_calendar()
+    assert "1 חדשים, 0 עודכנו, 0 הוסרו" in out
+    assert cal.calls == [("insert", "📣 פוסט · Captain Steady")]   # רק תאריך הפרסום, והאירוע של הלוח השני נשאר
+    later = (TODAY + timedelta(days=5)).isoformat()
+    posts[0].update(_post("p1", "Captain Steady", later))
+    cal.calls.clear()
+    assert "0 חדשים, 1 עודכנו, 0 הוסרו" in tools_sync.sync_posts_calendar()
+    ev = next(e for e in cal.store.values() if e["summary"].startswith("📣"))
+    assert ev["start"] == {"date": later} and "o1" in cal.store
