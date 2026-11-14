@@ -306,6 +306,8 @@ def _copy_updates(pairs: list, budget: int, preview: bool) -> int:
     for an_id, ao_id in pairs:
         for src, dst, dst_id, account, where in ((an_up.get(an_id, []), ao_up.get(ao_id, []), ao_id, "alphaomega", "AnyCan"),
                                                    (ao_up.get(ao_id, []), an_up.get(an_id, []), an_id, "anycan", "אלפא אומגה")):
+            if account == "alphaomega" and not tools_monday.ao_write_allowed():
+                continue  # לא כותבים באלפא אומגה
             there = [_key(u.get("text_body")) for u in dst]
             for u in reversed(src):  # מהישן לחדש
                 k = _key(u.get("text_body"))
@@ -327,7 +329,9 @@ def _copy_updates(pairs: list, budget: int, preview: bool) -> int:
 
 
 def sync_content_hub(limit: int = MAX_WRITES, preview: bool = False) -> str:
-    """סנכרון בשני הכיוונים בין הלוח של יוסי ב-monday של AnyCan (Social media schedule / Content Hub) לבין
+    """שימי לב: מ-14.11.2026 יוסי קבע שלא מעדכנים שום דבר ב-monday של אלפא אומגה. הסנכרון עובד רק בכיוון אחד:
+    מאלפא אומגה אל הלוח של יוסי ב-AnyCan. שום דבר לא נכתב, לא נוצר ולא מועתק לצד של אלפא אומגה.
+    (התיאור הישן, למקרה שיוסי יחזיר את הכתיבה:) סנכרון בשני הכיוונים בין הלוח של יוסי ב-monday של AnyCan (Social media schedule / Content Hub) לבין
     הלוח AlphaCare Marketing של אלפא אומגה:
     • פריט חדש ב-Content Hub של אלפא אומגה נוסף אצל יוסי; פריט חדש אצל יוסי (בכל קבוצה) נוסף באלפא אומגה, בקבוצה באותו שם.
     • שינוי בשדה (שם, תאריך, סטטוס, ערוץ, תוכן ועוד) עובר לצד השני; כששני הצדדים שונים בפעם הראשונה — הערך של יוסי גובר.
@@ -379,7 +383,7 @@ def _sync(limit: int, preview: bool) -> str:
         added += 1
         writes += 1
     # 2. חדש אצל יוסי → באלפא אומגה, בקבוצה באותו שם
-    for it in alone:
+    for it in (alone if tools_monday.ao_write_allowed() else []):  # לא יוצרים פריטים באלפא אומגה
         if writes >= limit:
             break
         if not preview:
@@ -420,6 +424,8 @@ def _sync(limit: int, preview: bool) -> str:
         except ValueError:
             state = {}
         to_an, to_ao, new = _merge(fields, it, other, state)
+        if not tools_monday.ao_write_allowed():
+            to_ao = {}  # שינוי אצל יוסי לא נכתב באלפא אומגה
         if not (to_an or to_ao) and new == state:
             continue
         if not preview:

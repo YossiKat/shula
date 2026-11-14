@@ -13,8 +13,18 @@ TOKENS = {"alphaomega": "MONDAY_API_TOKEN", "anycan": "MONDAY_ANYCAN_API_TOKEN"}
 ANYCAN_DEFAULT_BOARD = "AnyCan Ai"
 
 
+def ao_write_allowed() -> bool:
+    """יוסי קבע (14.11.2026): בשום אופן לא מעדכנים דברים ב-monday של אלפא אומגה — רק קוראים משם, ומעדכנים רק ב-monday שלו (AnyCan).
+    כדי להחזיר כתיבה לאלפא אומגה צריך להגדיר במפורש MONDAY_AO_WRITE=1 ב-Render."""
+    return os.environ.get("MONDAY_AO_WRITE", "") == "1"
+
+
 def _query(gql: str, variables: dict, account: str = "alphaomega") -> dict:
-    env = TOKENS.get(account, TOKENS["alphaomega"])
+    if account not in TOKENS:
+        account = "alphaomega"
+    if account == "alphaomega" and gql.lstrip().startswith("mutation") and not ao_write_allowed():
+        raise RuntimeError("חסום: לא מעדכנים את ה-monday של אלפא אומגה — רק קוראים ממנו. מעדכנים רק ב-monday של AnyCan.")
+    env = TOKENS[account]
     token = os.environ.get(env, "").strip()  # מפתח שהודבק עם רווח או ירידת שורה בסוף
     if not token:
         raise RuntimeError(f"monday של {account} עדיין לא מחובר (חסר {env} ב-Render)")
