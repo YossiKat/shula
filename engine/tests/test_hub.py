@@ -148,6 +148,7 @@ def _hubitem(id, name, date=None, status=""):
 
 
 def test_two_way_sync_sends_dates_new_items_and_updates(monkeypatch):
+    monkeypatch.setenv("MONDAY_AO_WRITE", "1")  # הכתיבה לאלפא אומגה כבויה כברירת מחדל; כאן בודקים את המצב הישן
     mine = [_row("a1", "Captain Steady", "ghub", ao_id="111", date="2026-11-18", status="Draft"),
             _row("a2", "פייסבוק · שיתוף", "gposts")]
     hub = [_hubitem("111", "Captain Steady", date="2026-07-03", status="Draft"), _hubitem("222", "חדש באלפא")]
@@ -170,6 +171,31 @@ def test_two_way_sync_sends_dates_new_items_and_updates(monkeypatch):
     assert len(up) == 1 and up[0][2] == "alphaomega" and up[0][1]["i"] == "111"
     assert up[0][1]["b"].startswith("<p>🔁 מ-AnyCan") and "קישור" in up[0][1]["b"]
     assert "1 חדשים אצלך, 1 חדשים באלפא אומגה, 1 פריטים עודכנו, 1 עדכונים הועתקו" in out
+
+
+def test_nothing_is_ever_written_to_alpha_omega_by_default(monkeypatch):
+    """יוסי, 14.11.2026: בשום אופן לא לעדכן דברים ב-monday של אלפא אומגה — רק ב-monday שלו."""
+    monkeypatch.delenv("MONDAY_AO_WRITE", raising=False)
+    mine = [_row("a1", "Captain Steady", "ghub", ao_id="111", date="2026-11-18", status="Draft"),
+            _row("a2", "פייסבוק · שיתוף", "gposts")]
+    hub = [_hubitem("111", "Captain Steady", date="2026-07-03", status="Draft"), _hubitem("222", "חדש באלפא")]
+    ups = {"a1": [{"id": "u1", "text_body": "🎬 פוסט מוכן", "body": "<p>🎬 פוסט מוכן</p>", "creator": {"name": "Yossi Kat"}, "replies": []}]}
+    calls = _two_way(monkeypatch, mine, hub, updates=ups)
+    tools_hub.sync_content_hub()
+    writes = [c for c in calls if c[0] in ("create_item", "change_multiple_column_values", "create_group", "create_update")]
+    assert writes and all(c[2] == "anycan" for c in writes)
+    # מה שחדש באלפא אומגה עדיין נכנס ללוח של יוסי
+    assert any(c[0] == "create_item" and json.loads(c[1]["v"])["aid"] == "222" for c in writes)
+
+
+def test_query_refuses_any_mutation_on_alpha_omega(monkeypatch):
+    import pytest
+    monkeypatch.delenv("MONDAY_AO_WRITE", raising=False)
+    monkeypatch.setenv("MONDAY_API_TOKEN", "x")
+    monkeypatch.setattr(tools_monday.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no network")))
+    for account in ("alphaomega", "something-else"):
+        with pytest.raises(RuntimeError, match="חסום"):
+            tools_monday._query("mutation ($i: ID!) { delete_item(item_id: $i) { id } }", {"i": "1"}, account)
 
 
 def test_two_way_sync_does_not_copy_an_update_twice(monkeypatch):
