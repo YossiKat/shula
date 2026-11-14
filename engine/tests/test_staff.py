@@ -12,7 +12,7 @@ def test_route_picks_the_right_department():
 
 
 def test_focus_and_roster_name_the_team():
-    assert "בתיה" in staff.focus_text("הוצאה 9 שח קנדי בר")
+    assert "ננסי" in staff.focus_text("הוצאה 9 שח קנדי בר")
     assert staff.focus_text("שלום") == ""
     roster = staff.roster_text()
     for d in staff.DEPARTMENTS.values():
@@ -37,9 +37,9 @@ def test_log_creates_missing_group_then_item(monkeypatch):
 
     out = staff.log_to_department("home", "הוצאה 21₪ – בית הלחם", "09:00")
     assert made[0] == ("7", "gnew", "הוצאה 21₪ – בית הלחם")
-    assert made[1][2] == "↗️ עדכון מבתיה: הוצאה 21₪ – בית הלחם"  # בתיה מעדכנת את מוני
+    assert made[1][2] == "↗️ עדכון מננסי: הוצאה 21₪ – בית הלחם"  # ננסי מעדכנת את רייצ׳ל
     assert "create_group" in calls and "create_update" in calls
-    assert "בתיה" in out and "מוני" in out
+    assert "ננסי" in out and "רייצ׳ל" in out
 
     made.clear()
     staff.log_to_department("admin", "נשלח מייל לקאי")
@@ -63,8 +63,15 @@ def test_shula_knows_the_daily_intel_report():
 
 
 def test_parse_intel_actions():
-    text = "3. פעולות\n📣 שירי: לבדוק את הקמפיין של Rune Labs | דחיפות: גבוהה | עד: 18.11\n🧠 רעיה: לבדוק כלי חדש\nסתם שורה"
+    text = "3. פעולות\n📣 ג׳סיקה: לבדוק את הקמפיין של Rune Labs | דחיפות: גבוהה | עד: 18.11\n🧠 אמילי: לבדוק כלי חדש\nסתם שורה"
     acts = staff.parse_intel_actions(text, 2026)
     assert acts[0] == {"dept": "cmo", "title": "לבדוק את הקמפיין של Rune Labs", "urgency": "🔴 דחוף", "due": "2026-11-18"}
     assert acts[1]["dept"] == "cto" and acts[1]["urgency"] == "🟠 חשוב" and acts[1]["due"] == ""
     assert len(acts) == 2
+
+
+def test_parse_intel_actions_new_and_old_names():
+    text = "📣 ג'סיקה: לבדוק מתחרה | דחיפות: דחוף | עד: 18.11\n🧠 רעיה: לבדוק כלי חדש"
+    acts = staff.parse_intel_actions(text, 2026)
+    assert [a["dept"] for a in acts] == ["cmo", "cto"]
+    assert acts[0]["urgency"] == "🔴 דחוף"
