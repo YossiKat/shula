@@ -1,5 +1,7 @@
 """סנכרון יומי בין ה-monday של AnyCan ליומן גוגל של יוסי.
-1. כל פריט בלוח שיש לו תאריך מופיע ביומן "יוסי קט" (ומתעדכן כשהתאריך או הסטטוס משתנים).
+1. רק פריטים חשובים מהלוח נכנסים ליומן "יוסי קט" כאירוע משלהם (סטטוס דחוף/חשוב/תקוע, או תאריך עם שעה), ומתעדכנים
+   כשהתאריך או הסטטוס משתנים. כל השאר נכנס לאירוע סיכום אחד ביום: "📋 monday – סיכום היום".
+   (יוסי, 15.11.2026: "כל עדכון ביומן סתם מעמיס — רק דברים חשובים, אחרי סיכום". MONDAY_CAL_ALL=1 מחזיר את הישן.)
 2. פגישה חדשה ביומן שמזכירה אדם או ארגון מהלוח נרשמת כעדכון על הפריט שלו ב-monday.
 רץ לבד פעם ביום בבוקר, ואפשר לבקש משולה 'סנכרני מנדיי ויומן'."""
 import json
@@ -22,6 +24,10 @@ MAX_UPDATES = 20       # הגנה: לא יותר מ-20 עדכונים ל-monday 
 DONE_WORDS = {"done", "בוצע", "הושלם", "סגור", "closed", "completed"}
 TAG = "shula_monday"   # סימון על אירוע שנוצר מה-monday
 LOGGED = "monday_logged"  # סימון על פגישה שכבר נרשמה ב-monday
+SUMMARY = "shula_monday_summary"  # סימון על אירוע הסיכום היומי
+SUMMARY_DAYS = 7       # הסיכום מראה מה מתוכנן ב-7 הימים הקרובים
+CAL_ALL = os.environ.get("MONDAY_CAL_ALL", "") == "1"
+IMPORTANT_WORDS = ("דחוף", "חשוב", "תקוע", "באיחור", "קריטי", "urgent", "high", "critical", "stuck", "overdue", "asap")
 _lock = threading.Lock()
 
 
@@ -53,8 +59,16 @@ def _is_done(item: dict) -> bool:
                for c in item["column_values"])
 
 
+def _is_important(item: dict, has_time: bool = False) -> bool:
+    """פריט חשוב = לא בוצע, ויש לו סטטוס/עדיפות דחוף-חשוב-תקוע, או שנקבעה לו שעה (פגישה / שיחה)."""
+    if _is_done(item):
+        return False
+    text = " ".join((c.get("text") or "") for c in item["column_values"] if c.get("type") in ("status", "dropdown")).lower()
+    return has_time or any(w in text for w in IMPORTANT_WORDS)
+
+
 def _wanted_events(board: dict, items: list, today) -> dict:
-    """{מפתח: אירוע יומן} לכל תאריך בלוח, מ-PAST_DAYS ימים אחורה והלאה."""
+    """{מפתח: אירוע יומן} לתאריכים חשובים בלוח, מ-PAST_DAYS ימים אחורה והלאה (MONDAY_CAL_ALL=1 — לכל תאריך)."""
     out = {}
     for it in items:
         status = "; ".join(f"{c['column']['title']}: {c['text']}" for c in it["column_values"]
@@ -68,6 +82,8 @@ def _wanted_events(board: dict, items: list, today) -> dict:
             except (ValueError, KeyError, TypeError):
                 continue
             if day < today - timedelta(days=PAST_DAYS):
+                continue
+            if not CAL_ALL and not _is_important(it, bool(val.get("time"))):
                 continue
             key = f"{it['id']}:{c['id']}"
             ev = {
@@ -108,6 +124,54 @@ def _same(old: dict, new: dict) -> bool:
             and old.get("description") == new["description"] and old.get("colorId") == new.get("colorId"))
 
 
+def _summary_event(board: dict, items: list, now: datetime) -> dict:
+    """אירוע אחד ביום שמסכם את ה-monday: מה מתוכנן ל-7 ימים, מה באיחור, ומה מהם חשוב (החשובים — גם כאירוע משלהם)."""
+    today, soon, late, n_imp = now.date(), [], [], 0
+    for it in items:
+        if _is_done(it):
+            continue
+        for c in it["column_values"]:
+            if c.get("type") != "date" or not c.get("value"):
+                continue
+            try:
+                val = json.loads(c["value"])
+                day = datetime.strptime(val["date"], "%Y-%m-%d").date()
+            except (ValueError, KeyError, TypeError):
+                continue
+            imp = _is_important(it, bool(val.get("time")))
+            line = f"{'❗ ' if imp else '• '}{day.strftime('%d.%m')} {it['name']} ({it['group']['title']})"
+            if today - timedelta(days=PAST_DAYS) <= day < today:
+                late.append((day, line))
+            elif today <= day <= today + timedelta(days=SUMMARY_DAYS):
+                soon.append((day, line))
+            else:
+                continue
+            n_imp += imp
+    soon.sort(key=lambda x: x[0]); late.sort(key=lambda x: x[0])
+    title = f"📋 monday – סיכום היום: {len(soon)} מתוכננים, {len(late)} באיחור"
+    desc = (f"מה-monday של AnyCan, לוח {board['name']}. ❗ = חשוב (מופיע גם כאירוע משלו ביומן).\n\n"
+            + (f"⏳ באיחור ({len(late)}):\n" + "\n".join(l for _, l in late[:25]) + "\n\n" if late else "")
+            + (f"📅 ב-{SUMMARY_DAYS} הימים הקרובים ({len(soon)}):\n" + "\n".join(l for _, l in soon[:40]) if soon else "אין משהו מתוכנן ב-7 הימים הקרובים.")
+            + f"\n\nhttps://{board['slug']}.monday.com/boards/{board['id']}")
+    start = now.replace(hour=7, minute=0, second=0, microsecond=0)
+    return {"summary": title, "description": desc[:8000], "colorId": tools_calendar.COLOR_IDS["monday"],
+            "transparency": "transparent", "reminders": {"useDefault": False, "overrides": []},
+            "start": {"dateTime": start.isoformat(), "timeZone": "Asia/Jerusalem"},
+            "end": {"dateTime": (start + timedelta(minutes=15)).isoformat(), "timeZone": "Asia/Jerusalem"},
+            "extendedProperties": {"private": {SUMMARY: today.isoformat()}}}
+
+
+def _write_summary(board: dict, items: list, now: datetime) -> str:
+    svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
+    ev = _summary_event(board, items, now)
+    found = _list(privateExtendedProperty=f"{SUMMARY}={now.date().isoformat()}", showDeleted=False)
+    if found:
+        svc.events().patch(calendarId=cal, eventId=found[0]["id"], body=ev).execute()
+    else:
+        svc.events().insert(calendarId=cal, body=ev).execute()
+    return ev["summary"]
+
+
 def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool = False) -> list:
     wanted = _wanted_events(board, items, now.date())
     svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
@@ -118,7 +182,7 @@ def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool =
     if preview:
         new = sorted((ev["start"].get("date") or ev["start"]["dateTime"][:10], ev["summary"])
                      for key, ev in wanted.items() if key not in existing)
-        return ([f"בדיקה בלבד, לא נכתב כלום. ייכנסו ליומן {len(new)} אירועים חדשים (מתוך {len(wanted)} תאריכים בלוח):"]
+        return ([f"בדיקה בלבד, לא נכתב כלום. ייכנסו ליומן {len(new)} אירועים חדשים (מתוך {len(wanted)} תאריכים חשובים בלוח), ועוד אירוע סיכום אחד:"]
                 + [f"- {d[8:]}.{d[5:7]}.{d[:4]} {name}" for d, name in new[:40]]
                 + (["ועוד..."] if len(new) > 40 else []))
     added = changed = removed = 0
@@ -134,7 +198,10 @@ def _monday_to_calendar(board: dict, items: list, now: datetime, preview: bool =
     for old in existing.values():  # התאריך נמחק מה-monday או שהפריט הוסר
         svc.events().delete(calendarId=cal, eventId=old["id"]).execute()
         removed += 1
-    return [f"מה-monday ליומן: {added} חדשים, {changed} עודכנו, {removed} הוסרו (מתוך {len(wanted)} תאריכים בלוח)."]
+    out = [f"מה-monday ליומן (רק חשובים): {added} חדשים, {changed} עודכנו, {removed} הוסרו ({len(wanted)} תאריכים חשובים בלוח)."]
+    if not CAL_ALL:
+        out.append("סיכום ביומן: " + _write_summary(board, items, now))
+    return out
 
 
 def _when(e: dict) -> str:
@@ -167,7 +234,7 @@ def _calendar_to_monday(items: list, now: datetime, preview: bool = False) -> li
     lines, sent = [], 0
     for e in events:
         private = (e.get("extendedProperties") or {}).get("private") or {}
-        if TAG in private or "shula_snapshot" in private or e.get("status") == "cancelled" or not e.get("start"):
+        if TAG in private or "shula_snapshot" in private or SUMMARY in private or e.get("status") == "cancelled" or not e.get("start"):
             continue
         hit = _matches(e, items)
         stamp = ",".join(it["id"] for it in hit) + "@" + _when(e)
@@ -197,7 +264,7 @@ def _calendar_to_monday(items: list, now: datetime, preview: bool = False) -> li
 
 def sync_monday_and_calendar(preview: bool = False) -> str:
     """מסנכרנת עכשיו בין ה-monday של AnyCan ליומן גוגל של יוסי, בשני הכיוונים:
-    תאריכים מהלוח AnyCan Ai נכנסים ליומן, ופגישות חדשות ביומן שקשורות לאדם או ארגון מהלוח נרשמות כעדכון על הפריט שלו.
+    תאריכים חשובים מהלוח AnyCan Ai נכנסים ליומן (וכל השאר — באירוע סיכום אחד ביום), ופגישות חדשות ביומן שקשורות לאדם או ארגון מהלוח נרשמות כעדכון על הפריט שלו.
     זה רץ לבד כל בוקר. השתמשי כשיוסי מבקש 'סנכרני מנדיי ויומן' או שואל מה סונכרן.
     preview=True = רק להראות מה ייכנס, בלי לכתוב כלום (כשיוסי מבקש 'תראי לי מה ייכנס' או 'בדיקה')."""
     if not _lock.acquire(blocking=False):

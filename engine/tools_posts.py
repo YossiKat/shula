@@ -425,8 +425,8 @@ def import_facebook_shares(limit: int = IMPORT_BATCH) -> str:
                     ensure_ascii=False)}, "anycan")
             steps += 1
     stats += f" עודכן הצעד הבא ב-{steps} פוסטים." if steps else ""
-    try:
-        cal = shares_to_calendar(rows)
+    try:  # יוסי (15.11.2026): לא כל סבב שיתופים ביומן — זה מעמיס. SHARES_TO_CALENDAR=1 מחזיר.
+        cal = shares_to_calendar(rows) if os.environ.get("SHARES_TO_CALENDAR", "") == "1" else ""
         stats += f" {cal}" if cal else ""
     except Exception as e:  # היומן לא יעצור את המנדיי
         stats += f" (היומן לא עודכן: {str(e)[:120]})"

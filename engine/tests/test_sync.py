@@ -77,30 +77,44 @@ def _setup(monkeypatch, items, events=()):
     return cal, updates
 
 
-def test_monday_dates_enter_the_calendar_once(monkeypatch):
-    items = [_item("1", "Mayo Clinic", SOON), _item("2", "No Date Org"),
-             _item("3", "Old One", (TODAY - timedelta(days=60)).isoformat())]
+def _own(cal):
+    return {k: e for k, e in cal.store.items() if tools_sync.SUMMARY not in e.get("extendedProperties", {}).get("private", {})}
+
+
+def test_only_important_monday_dates_get_their_own_event_the_rest_go_to_one_summary(monkeypatch):
+    items = [_item("1", "Mayo Clinic", SOON, status="דחוף"), _item("2", "No Date Org"),
+             _item("3", "Old One", (TODAY - timedelta(days=60)).isoformat()), _item("4", "Quiet Org", SOON)]
     cal, _ = _setup(monkeypatch, items)
     out = tools_sync.sync_monday_and_calendar()
-    assert "1 חדשים" in out and cal.calls == [("insert", "📋 Mayo Clinic · Follow up")]
-    ev = next(iter(cal.store.values()))
+    assert "1 חדשים" in out and ("insert", "📋 Mayo Clinic · Follow up") in cal.calls
+    (ev,) = _own(cal).values()
     assert ev["start"] == {"date": SOON} and "boards/77/pulses/1" in ev["description"] and ev["colorId"] == "2"
+    (summ,) = [e for e in cal.store.values() if e not in _own(cal).values()]
+    assert summ["summary"].startswith("📋 monday – סיכום היום: 2 מתוכננים") and "Quiet Org" in summ["description"]
+    assert "❗" in summ["description"] and summ["transparency"] == "transparent"
     cal.calls.clear()
     assert "0 חדשים, 0 עודכנו, 0 הוסרו" in tools_sync.sync_monday_and_calendar()
-    assert cal.calls == []
+    assert [c[0] for c in cal.calls] == ["patch"] and len(cal.store) == 2  # רק הסיכום של היום מתעדכן, לא נוסף שני
+
+
+def test_old_unimportant_events_are_cleared_from_the_calendar(monkeypatch):
+    old = {"id": "o1", "summary": "📋 Quiet Org · Follow up", "start": {"date": SOON},
+           "extendedProperties": {"private": {"shula_monday": "4:date4", "shula_monday_on": "1"}}}
+    cal, _ = _setup(monkeypatch, [_item("4", "Quiet Org", SOON)], [old])
+    assert "1 הוסרו" in tools_sync.sync_monday_and_calendar() and "o1" not in cal.store
 
 
 def test_changed_date_done_status_and_removed_date_are_followed(monkeypatch):
-    items = [_item("1", "Mayo Clinic", SOON), _item("2", "Cleveland Clinic", SOON)]
+    items = [_item("1", "Mayo Clinic", SOON, status="Urgent"), _item("2", "Cleveland Clinic", SOON, status="Stuck")]
     cal, _ = _setup(monkeypatch, items)
     tools_sync.sync_monday_and_calendar()
     later = (TODAY + timedelta(days=9)).isoformat()
-    items[0].update(_item("1", "Mayo Clinic", later, status="Done"))
-    items[1].update(_item("2", "Cleveland Clinic"))
+    items[0].update(_item("1", "Mayo Clinic", later, status="Urgent"))
+    items[1].update(_item("2", "Cleveland Clinic", SOON, status="Done"))
     out = tools_sync.sync_monday_and_calendar()
-    assert "0 חדשים, 1 עודכנו, 1 הוסרו" in out
-    (ev,) = cal.store.values()
-    assert ev["start"] == {"date": later} and ev["colorId"] == "7"
+    assert "0 חדשים, 1 עודכנו, 1 הוסרו" in out  # מה שבוצע יורד מהיומן
+    (ev,) = _own(cal).values()
+    assert ev["start"] == {"date": later} and ev["colorId"] == "2"
 
 
 def test_meeting_about_someone_in_monday_is_logged_on_their_item_once(monkeypatch):
@@ -121,7 +135,7 @@ def test_meeting_about_someone_in_monday_is_logged_on_their_item_once(monkeypatc
 
 
 def test_events_created_from_monday_are_not_logged_back(monkeypatch):
-    cal, updates = _setup(monkeypatch, [_item("1", "Mayo Clinic", SOON)])
+    cal, updates = _setup(monkeypatch, [_item("1", "Mayo Clinic", SOON, status="חשוב")])
     tools_sync.sync_monday_and_calendar()
     tools_sync.sync_monday_and_calendar()
     assert updates == []
@@ -129,7 +143,7 @@ def test_events_created_from_monday_are_not_logged_back(monkeypatch):
 
 def test_preview_shows_what_would_happen_and_writes_nothing(monkeypatch):
     meeting = {"id": "m1", "summary": "זום עם Mayo Clinic", "start": {"date": SOON}}
-    cal, updates = _setup(monkeypatch, [_item("1", "Mayo Clinic", SOON)], [meeting])
+    cal, updates = _setup(monkeypatch, [_item("1", "Mayo Clinic", SOON, status="דחוף")], [meeting])
     out = tools_sync.sync_monday_and_calendar(preview=True)
     assert "לא נכתב כלום" in out and "📋 Mayo Clinic · Follow up" in out and "יירשם ב-monday על Mayo Clinic" in out
     assert cal.calls == [] and updates == []
