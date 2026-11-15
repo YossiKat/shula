@@ -302,6 +302,7 @@ def daily_loop(check_every: int = 600) -> None:
     last = start.date() if start.hour >= SYNC_HOUR else None
     last_hour = None
     last_claude = None  # היומן של Claude → monday: כל בוקר ב-06:00 (גם אחרי הפעלה מחדש — הכפולים מסוננים)
+    last_outreach = None  # סריקת aCare – למי לספר: פעם בשבוע ביום ראשון, ופעם אחת אחרי כל הפעלה (הכפולים מסוננים)
     while True:
         time.sleep(check_every)
         now = datetime.now(TZ)
@@ -323,6 +324,13 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("monday snapshot: %s", tools_snapshot.anycan_snapshot().replace("\n", " | "))
             except Exception:
                 log.exception("monday snapshot failed")
+        if 8 <= now.hour < 22 and (last_outreach is None or (now.weekday() == 6 and last_outreach != now.date())):
+            last_outreach = now.date()
+            try:
+                import tools_outreach
+                log.info("acare outreach scan: %s", tools_outreach.acare_outreach_scan().replace("\n", " | "))
+            except Exception:
+                log.exception("acare outreach scan failed")
         if last_hour != (now.date(), now.hour):
             last_hour = (now.date(), now.hour)
             _import_shares()
