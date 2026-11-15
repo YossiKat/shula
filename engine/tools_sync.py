@@ -222,12 +222,19 @@ def _import_shares() -> None:
         log.exception("facebook shares import failed")
 
 
+def _claude_hour() -> int:
+    import staff
+    return staff.CLAUDE_LOG_HOUR
+
+
 def daily_loop(check_every: int = 600) -> None:
     """הסנכרון עם היומן: פעם ביום, אחרי SYNC_HOUR בבוקר (שעון ישראל); ביום שבו שולה הופעלה מחדש אחרי השעה הזו — מחכה למחר.
+    היומן של Claude: כל בוקר ב-06:00 → monday של AnyCan, לקבוצה של כל מחלקה.
     השיתופים והצפיות מפייסבוק: כל שעה (קריאת גיליון ועדכון monday, בלי AI) — כי Claude ממלא את הגיליון בשעה לא קבועה."""
     start = datetime.now(TZ)
     last = start.date() if start.hour >= SYNC_HOUR else None
     last_hour = None
+    last_claude = None  # היומן של Claude → monday: כל בוקר ב-06:00 (גם אחרי הפעלה מחדש — הכפולים מסוננים)
     while True:
         time.sleep(check_every)
         now = datetime.now(TZ)
@@ -237,6 +244,13 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("daily monday sync: %s", sync_monday_and_calendar().replace("\n", " | "))
             except Exception:
                 log.exception("daily monday sync failed")
+        if now.hour >= _claude_hour() and last_claude != now.date():
+            last_claude = now.date()
+            try:
+                import staff
+                log.info("claude log → monday: %s", staff.import_claude_actions())
+            except Exception:
+                log.exception("claude log import failed")
         if last_hour != (now.date(), now.hour):
             last_hour = (now.date(), now.hour)
             _import_shares()

@@ -75,3 +75,37 @@ def test_parse_intel_actions_new_and_old_names():
     acts = staff.parse_intel_actions(text, 2026)
     assert [a["dept"] for a in acts] == ["cmo", "cto"]
     assert acts[0]["urgency"] == "🔴 דחוף"
+
+
+def test_claude_action_goes_to_the_right_department():
+    assert staff.dept_of_action("יומן Google", "💸 הוצאה 60₪ – תספורת") == "home"
+    assert staff.dept_of_action("דשבורד המטה – טכנולוגיה", "אושרה בקשה: Canva Pro", "ג׳סיקה") == "cmo"
+    assert staff.dept_of_action("מודיעין → שירי", "לבדוק קמפיין") == "cmo"  # שם ישן
+    assert staff.dept_of_action("Gmail", "מחיקת טיוטות כפולות") == "admin"
+
+
+def test_import_claude_actions_writes_new_rows_once_to_anycan(monkeypatch):
+    import tools_claude_log
+    from datetime import date
+    today = date.today().strftime("%d.%m.%Y")
+    rows = [["תאריך", "שעה", "איפה", "מה", "פרטים"],
+            [today, "09:30", "יומן Google", "💸 הוצאה 60₪ – תספורת", "יוני הספר"],
+            [today, "09:40", "Gmail", "מחיקת טיוטות כפולות", ""],
+            ["01.01.2020", "10:00", "יומן Google", "ישן מאוד", ""]]
+    monkeypatch.setattr(tools_claude_log, "_rows", lambda: rows)
+    monkeypatch.setattr(staff, "_board", lambda: {"id": "7", "groups": []})
+    monkeypatch.setattr(staff, "_group_id", lambda b, t: t)
+    existing = {staff.DEPARTMENTS["admin"]["group"]: {staff.claude_action_name(rows[2])}}
+    monkeypatch.setattr(staff, "_names_in_group", lambda b, g: set(existing.get(g, set())))
+    made, updates = [], []
+    monkeypatch.setattr(tools_hub, "_create", lambda b, g, n, v, a: (made.append((g, n, a)) or "55"))
+
+    def query(gql, variables, account="alphaomega"):
+        assert account == "anycan"  # אף פעם לא אלפא אומגה
+        updates.append(variables["b"])
+        return {"create_update": {"id": "u"}}
+    monkeypatch.setattr(tools_monday, "_query", query)
+
+    out = staff.import_claude_actions()
+    assert made == [(staff.DEPARTMENTS["home"]["group"], staff.claude_action_name(rows[1]), "anycan")]
+    assert "יוני הספר" in updates[0] and "ננסי: 1" in out
