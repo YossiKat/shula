@@ -23,3 +23,10 @@ def test_draft_language_follows_the_name_and_makes_no_medical_claims():
     assert en.startswith("Hi Vanessa") and "Alpha Omega" in en
     for bad in ("מטפל ב", "משפר", "מרפא", "cure", "treat", "improve"):
         assert bad not in he and bad not in en
+
+
+def test_work_plan_puts_clinicians_first_ten_per_week():
+    f = [{"seg": "partner", "score": 9, "email": "a@x", "phone": "", "name": f"P{i}"} for i in range(5)]
+    f += [{"seg": "clinic", "score": 5, "email": "", "phone": "1", "name": f"C{i}"} for i in range(8)]
+    plan = o.work_plan(f)
+    assert [p["seg"] for p in plan[:8]] == ["clinic"] * 8 and plan[9]["week"] == 1 and plan[10]["week"] == 2

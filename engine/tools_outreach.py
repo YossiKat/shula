@@ -158,27 +158,54 @@ def acare_outreach_scan(preview: bool = False) -> str:
         tools_monday._query("mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }",
                             {"i": item, "b": body[:3000]}, "anycan")
         made.append(f)
-    if made:
-        _calendar_note(made, counts, len(found))
+    _work_plan(found, made, counts)
     return head + f"\nנפתחו {len(made)} שורות חדשות בקבוצה '{GROUP}' בלוח AnyCan Ai." + ("" if made else " (כולם כבר היו שם)")
 
 
-def _calendar_note(made: list, counts: dict, total: int) -> None:
-    """אירוע אחד ביומן עם הסיכום — לא אירוע לכל איש קשר."""
+PRIORITY = ["clinic", "community", "partner", "family", "other"]
+PER_WEEK = 10
+PLAN_TAG = "shula_outreach_plan"
+
+
+def work_plan(found: list) -> list:
+    """תוכנית עבודה: הכי מתאימים קודם (רופאים ומטפלים, אחר כך עמותות, שותפים, משפחות), 10 פניות בשבוע.
+    מחזירה את הרשימה עם 'week' לכל אחד."""
+    order = sorted(found, key=lambda f: (PRIORITY.index(f["seg"]), -f["score"], not (f["email"] or f["phone"])))
+    return [{**f, "week": i // PER_WEEK + 1} for i, f in enumerate(order)]
+
+
+def _work_plan(found: list, made: list, counts: dict) -> None:
+    """אירוע אחד ביומן עם כל תוכנית העבודה (מתעדכן באותו יום, לא אירוע לכל איש קשר)."""
     now = datetime.now(tools_calendar.TZ)
+    plan = work_plan(found)
+    weeks = {}
+    for f in plan[:120]:
+        how = "מייל" if f["email"] else ("טלפון" if f["phone"] else "אין פרטי קשר – לבדוק")
+        weeks.setdefault(f["week"], []).append(f"• {f['name']} | {NAMES[f['seg']]} | {how} | {f['board']}")
+    body = ("תוכנית עבודה – למי לספר על aCare ועל העבודה שלך באלפא אומגה.\n"
+            f"שולה סרקה את כל ה-monday של AnyCan: {len(found)} אנשי קשר ({len(made)} חדשים היום).\n"
+            + " · ".join(f"{NAMES[k]} {n}" for k, n in counts.items()) + "\n"
+            "סדר: קודם רופאים ומטפלים, אחר כך עמותות ומועדונים, שותפים, משפחות. 10 פניות בשבוע.\n"
+            "כל שורה בקבוצה '🤝 aCare – למי לספר' בלוח AnyCan Ai – עם טיוטת הודעה. לא נשלח כלום; כל נוסח לאישור דימה.\n")
+    for w, lines in weeks.items():
+        body += f"\nשבוע {w}:\n" + "\n".join(lines) + "\n"
+    if len(plan) > 120:
+        body += f"\nועוד {len(plan) - 120} – בקבוצה במנדיי."
     start = now.replace(second=0, microsecond=0)
-    lines = [f"{NAMES[k]}: {n}" for k, n in counts.items()]
-    top = [f"• {f['name']} ({NAMES[f['seg']]})" for f in made[:20]]
-    tools_calendar._svc().events().insert(calendarId=tools_calendar.CALENDAR_ID, body={
-        "summary": f"🤝 aCare – {len(made)} אנשי קשר חדשים לעדכן (מתוך {total})",
-        "description": ("שולה סרקה את כל ה-monday של AnyCan. הכול בקבוצה '🤝 aCare – למי לספר' בלוח AnyCan Ai,\n"
-                        "עם הסיבה וטיוטת הודעה לכל אחד. לא נשלח כלום — כל נוסח לאישור דימה.\n\n"
-                        + "\n".join(lines) + "\n\nהראשונים ברשימה:\n" + "\n".join(top)),
-        "colorId": tools_calendar.COLOR_IDS["monday"], "transparency": "transparent",
-        "reminders": {"useDefault": False, "overrides": []},
-        "start": {"dateTime": start.isoformat(), "timeZone": "Asia/Jerusalem"},
-        "end": {"dateTime": (start + timedelta(minutes=15)).isoformat(), "timeZone": "Asia/Jerusalem"},
-    }).execute()
+    ev = {"summary": f"🤝 aCare – תוכנית עבודה: {len(found)} אנשי קשר, {PER_WEEK} בשבוע",
+          "description": body[:8000], "colorId": tools_calendar.COLOR_IDS["monday"], "transparency": "transparent",
+          "reminders": {"useDefault": False, "overrides": []},
+          "start": {"dateTime": start.isoformat(), "timeZone": "Asia/Jerusalem"},
+          "end": {"dateTime": (start + timedelta(minutes=15)).isoformat(), "timeZone": "Asia/Jerusalem"},
+          "extendedProperties": {"private": {PLAN_TAG: now.date().isoformat()}}}
+    svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
+    old = svc.events().list(calendarId=cal, privateExtendedProperty=f"{PLAN_TAG}={now.date().isoformat()}",
+                            maxResults=5).execute().get("items", [])
+    if old:
+        ev.pop("start"); ev.pop("end")
+        svc.events().patch(calendarId=cal, eventId=old[0]["id"], body=ev).execute()
+    else:
+        svc.events().insert(calendarId=cal, body=ev).execute()
 
 
 OUTREACH_TOOLS = [acare_outreach_scan]

@@ -234,7 +234,7 @@ def _calendar_to_monday(items: list, now: datetime, preview: bool = False) -> li
     lines, sent = [], 0
     for e in events:
         private = (e.get("extendedProperties") or {}).get("private") or {}
-        if TAG in private or "shula_snapshot" in private or SUMMARY in private or e.get("status") == "cancelled" or not e.get("start"):
+        if TAG in private or "shula_snapshot" in private or SUMMARY in private or "shula_outreach_plan" in private or e.get("status") == "cancelled" or not e.get("start"):
             continue
         hit = _matches(e, items)
         stamp = ",".join(it["id"] for it in hit) + "@" + _when(e)
