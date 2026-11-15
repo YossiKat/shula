@@ -48,9 +48,9 @@
     "semantic_hash": "d880c7346f3830c11f19f812e3da61c8"
   },
   "engine/shula_agent.py": {
-    "mtime": 1794568209.9425392,
-    "seen": 1794730511.1781983,
-    "ast_hash": "2705556b35ff047ee02c93e978a99e8a",
+    "mtime": 1794732495.1003864,
+    "seen": 1794732513.8003416,
+    "ast_hash": "c7cc878c9095fae1d97960fab2fca7f5",
     "semantic_hash": ""
   },
   "engine/tests/conftest.py": {
@@ -264,15 +264,27 @@
     "semantic_hash": ""
   },
   "engine/tools_sync.py": {
-    "mtime": 1794730479.0333614,
-    "seen": 1794730511.1782398,
-    "ast_hash": "10dc91fa0907a4b5c1c3759fdcf209f5",
+    "mtime": 1794732507.4705014,
+    "seen": 1794732513.8003745,
+    "ast_hash": "f29e226b6f9f8a83fbc313f0117bdc6b",
     "semantic_hash": ""
   },
   "engine/voice.py": {
     "mtime": 1794028933.4668608,
     "seen": 1794730511.1782424,
     "ast_hash": "07a738cdab8b900bf693a2737ef551a3",
+    "semantic_hash": ""
+  },
+  "engine/tests/test_snapshot.py": {
+    "mtime": 1794732495.1042957,
+    "seen": 1794732513.8003573,
+    "ast_hash": "0e22e78e972e75af3b12b824662bdfbb",
+    "semantic_hash": ""
+  },
+  "engine/tools_snapshot.py": {
+    "mtime": 1794732486.3522954,
+    "seen": 1794732513.800372,
+    "ast_hash": "e3da5d912cfcf5a4d324dd87b5948e2f",
     "semantic_hash": ""
   }
 }

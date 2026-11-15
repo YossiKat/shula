@@ -167,7 +167,7 @@ def _calendar_to_monday(items: list, now: datetime, preview: bool = False) -> li
     lines, sent = [], 0
     for e in events:
         private = (e.get("extendedProperties") or {}).get("private") or {}
-        if TAG in private or e.get("status") == "cancelled" or not e.get("start"):
+        if TAG in private or "shula_snapshot" in private or e.get("status") == "cancelled" or not e.get("start"):
             continue
         hit = _matches(e, items)
         stamp = ",".join(it["id"] for it in hit) + "@" + _when(e)
@@ -251,6 +251,11 @@ def daily_loop(check_every: int = 600) -> None:
                 log.info("claude log → monday: %s", staff.import_claude_actions())
             except Exception:
                 log.exception("claude log import failed")
+            try:
+                import tools_snapshot
+                log.info("monday snapshot: %s", tools_snapshot.anycan_snapshot().replace("\n", " | "))
+            except Exception:
+                log.exception("monday snapshot failed")
         if last_hour != (now.date(), now.hour):
             last_hour = (now.date(), now.hour)
             _import_shares()
