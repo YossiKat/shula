@@ -30,6 +30,7 @@ from tools_sync import SYNC_TOOLS
 from tools_weather import WEATHER_TOOLS
 import staff
 from staff import STAFF_TOOLS
+from tools_snapshot import SNAPSHOT_TOOLS
 
 TZ = ZoneInfo("Asia/Jerusalem")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
@@ -95,7 +96,7 @@ def _facts_text() -> str:
 
 
 MEMORY_TOOLS = [remember_fact, forget_fact]
-TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + POSTS_TOOLS + HUB_TOOLS + SYNC_TOOLS + CLAUDE_LOG_TOOLS + MEMORY_TOOLS + WEATHER_TOOLS + STAFF_TOOLS]
+TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + POSTS_TOOLS + HUB_TOOLS + SYNC_TOOLS + CLAUDE_LOG_TOOLS + MEMORY_TOOLS + WEATHER_TOOLS + STAFF_TOOLS + SNAPSHOT_TOOLS]
 
 # זיכרון: {sender: [{"role": "user"|"model", "text": "..."}]}
 _histories: dict[str, list] = defaultdict(list)
