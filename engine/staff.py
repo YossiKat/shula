@@ -256,3 +256,79 @@ def import_intel_actions(days: int = 2) -> str:
 
 
 STAFF_TOOLS.append(import_intel_actions)
+
+
+# ---- יומן הפעולות של Claude → monday של AnyCan, כל בוקר ב-06:00 ----
+# יוסי (15.11.2026): כל פעולה ש-Claude עושה בשבילו (נרשמת בגיליון "יומן הפעולות של Claude")
+# נכנסת כל בוקר ב-06:00 ל-monday של AnyCan, לקבוצה של המחלקה שעשתה אותה. רק AnyCan — אף פעם לא אלפא אומגה.
+import os
+
+CLAUDE_LOG_HOUR = int(os.environ.get("CLAUDE_LOG_SYNC_HOUR", "6"))
+CLAUDE_LOG_MAX = 150     # הגנה: לא יותר מ-150 שורות בריצה אחת
+CLAUDE_MARK = "🤖 "      # כך מזהים ב-monday שורה שהגיעה מהיומן של Claude
+_DATE = re.compile(r"^\s*(\d{1,2})[./](\d{1,2})[./](\d{4})")
+
+
+def _row_date(text: str):
+    from datetime import date
+    m = _DATE.match(text or "")
+    if not m:
+        return None
+    try:
+        return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
+
+
+def dept_of_action(where: str, what: str, details: str = "") -> str:
+    """לאיזו מחלקה שייכת פעולה מהיומן: קודם לפי שם של בעלת תפקיד (גם השמות הישנים), אחר כך לפי מילות המפתח. ברירת מחדל: סוזן."""
+    text = f"{where} {what} {details}".replace("'", "׳")
+    for name, key in _NAMES.items():
+        if name in text:
+            return key
+    return route(text) or "admin"
+
+
+def claude_action_name(row: list) -> str:
+    r = (list(row) + [""] * 5)[:5]
+    return f"{CLAUDE_MARK}{r[0].strip()} {r[1].strip()} · {r[3].strip() or r[2].strip() or 'פעולה'}"[:250]
+
+
+def import_claude_actions(days: int = 2) -> str:
+    """מכניסה ל-monday של AnyCan את הפעולות ש-Claude עשה בשביל יוסי (מהגיליון 'יומן הפעולות של Claude'):
+    כל פעולה היא שורה בקבוצה של המחלקה שעשתה אותה (רייצ׳ל, רות, ננסי, ג׳סיקה, אמילי, סוזן, ג׳ניפר), עם הפרטים כעדכון.
+    שורה שכבר נכנסה לא נכנסת שוב. רץ לבד כל בוקר ב-06:00 על היומיים האחרונים.
+    השתמשי כשיוסי מבקש 'תכניסי את הפעולות של Claude למנדיי'."""
+    import tools_claude_log
+    from datetime import date, timedelta
+    since = date.today() - timedelta(days=max(0, int(days)))
+    rows = [r for r in tools_claude_log._rows()[1:] if (_row_date(r[0] if r else "") or date.min) >= since]
+    if not rows:
+        return "אין פעולות חדשות של Claude ביומיים האחרונים."
+    board = _board()
+    have, made = {}, {}
+    for r in rows:
+        if sum(made.values()) >= CLAUDE_LOG_MAX:
+            break
+        r = (list(r) + [""] * 5)[:5]
+        key = dept_of_action(r[2], r[3], r[4])
+        d = DEPARTMENTS[key]
+        gid = _group_id(board, d["group"])
+        if gid not in have:
+            have[gid] = _names_in_group(board["id"], gid)
+        name = claude_action_name(r)
+        if name in have[gid]:
+            continue
+        item = tools_hub._create(board["id"], gid, name, {}, "anycan")
+        have[gid].add(name)
+        body = f"מקור: יומן הפעולות של Claude\nאיפה: {r[2]}\nמה: {r[3]}" + (f"\nפרטים: {r[4]}" if r[4].strip() else "")
+        tools_monday._query("mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }",
+                            {"i": item, "b": body[:2000]}, "anycan")
+        made[key] = made.get(key, 0) + 1
+    if not made:
+        return "כל הפעולות של Claude כבר נמצאות ב-monday."
+    parts = [f"{DEPARTMENTS[k]['emoji']} {DEPARTMENTS[k]['name']}: {n}" for k, n in made.items()]
+    return f"נכנסו ל-monday {sum(made.values())} פעולות של Claude — " + ", ".join(parts)
+
+
+STAFF_TOOLS.append(import_claude_actions)
