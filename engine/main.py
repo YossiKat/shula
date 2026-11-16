@@ -17,6 +17,9 @@ log = logging.getLogger("shula")
 
 app = FastAPI()
 
+import hq  # noqa: E402 — המטה של שולה באתר: /hq
+app.include_router(hq.router)
+
 # Twilio — אם יש פרטי חשבון, שולה עונה "ברקע" בלי מגבלת 15 השניות של Twilio
 TWILIO_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
