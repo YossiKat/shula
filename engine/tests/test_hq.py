@@ -74,3 +74,15 @@ def test_departments_and_alerts(monkeypatch):
     by = {d["key"]: d for d in s["depts"]}
     assert len(s["depts"]) == 7 and by["cmo"]["open"] == 1 and by["cfo"]["late"] == 1
     assert any(a["level"] == "late" and "קבלה" in a["text"] for a in s["alerts"])
+
+
+def test_book_the_meeting_room(monkeypatch):
+    c, store = _client(monkeypatch)
+    c.cookies.set(hq.COOKIE, hq.make_token("session", 60))
+    r = c.post("/hq/api/room", json={"topic": "ישיבת צוות שבועית", "day": "2026-11-22", "at": "10:00",
+                                      "minutes": 60, "depts": ["cmo", "cto"]}, headers={"x-hq": "1"}).json()
+    assert r["ok"] and r["title"] == "🏛️ חדר ישיבות – ישיבת צוות שבועית (ג׳סיקה, אמילי)"
+    ev = next(iter(store.values()))
+    assert ev["colorId"] == "11" and ev["end"]["dateTime"].startswith("2026-11-22T11:00")
+    s = c.get("/hq/api/today").json()
+    assert "week" in s and "done_week" in s and all("dept" in i for i in s["today"])

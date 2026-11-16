@@ -117,7 +117,7 @@ def _item(e: dict) -> dict:
         kind = "done"
     return {"id": e["id"], "title": title, "time": "" if all_day else when.strftime("%H:%M"),
             "day": when.date().isoformat(), "kind": kind, "where": e.get("location") or "",
-            "can_done": _is_open_task(e)}
+            "can_done": _is_open_task(e), "dept": dept_of(title)}
 
 
 DEPTS = [  # (מפתח, שם, אימוג'י, מילים בכותרת)
@@ -143,8 +143,8 @@ def snapshot(now: datetime | None = None) -> dict:
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month = today.replace(day=1)
     since = min(month, today - timedelta(days=14))
-    evs = [e for e in _events(since, today + timedelta(days=2)) if _visible(e)]
-    day_items, tomorrow, late = [], [], []
+    evs = [e for e in _events(since, today + timedelta(days=8)) if _visible(e)]
+    day_items, tomorrow, late, week, done_week = [], [], [], [], []
     done7 = spent_today = spent_month = income_month = 0
     for e in evs:
         when, _ = _start(e)
@@ -158,12 +158,15 @@ def snapshot(now: datetime | None = None) -> dict:
             day_items.append(_item(e))
             if e.get("colorId") == "6":
                 spent_today += _amount(title)
-        elif today + timedelta(days=1) <= when < today + timedelta(days=2):
-            tomorrow.append(_item(e))
+        elif today + timedelta(days=1) <= when < today + timedelta(days=8):
+            week.append(_item(e))
+            if when < today + timedelta(days=2):
+                tomorrow.append(_item(e))
         elif when < today and _is_open_task(e) and when >= today - timedelta(days=14):
             late.append(_item(e))
         if e.get("colorId") == "7" and today - timedelta(days=6) <= when < today + timedelta(days=1):
             done7 += 1
+            done_week.append(_item(e))
     open_today = sum(1 for i in day_items if i["can_done"])
     stats = {k: {"key": k, "name": n, "emoji": em, "open": 0, "late": 0, "done": 0} for k, n, em, _ in DEPTS}
     for i in day_items:
@@ -180,7 +183,7 @@ def snapshot(now: datetime | None = None) -> dict:
     return {"depts": list(stats.values()), "alerts": alerts,"now": now.strftime("%H:%M"), "date": today.date().isoformat(),
             "tiles": {"open": open_today, "late": len(late), "done7": done7, "spent": round(spent_today)},
             "money": {"spent": round(spent_month), "income": round(income_month), "month": month.strftime("%m.%Y")},
-            "today": day_items, "tomorrow": tomorrow, "late": late[-20:]}
+            "today": day_items, "tomorrow": tomorrow, "late": late[-20:], "week": week[:120], "done_week": done_week[-80:]}
 
 
 def mark_done(event_id: str) -> dict:
@@ -191,6 +194,26 @@ def mark_done(event_id: str) -> dict:
     title = "✅ בוצע: " + (e.get("summary") or "")
     svc.events().patch(calendarId=tools_calendar.CALENDAR_ID, eventId=event_id, sendUpdates="none",
                        body={"summary": title, "colorId": "7"}).execute()
+    return {"ok": True, "title": title}
+
+
+def book_room(topic: str, day: str, at: str, depts: list, minutes: int = 60) -> dict:
+    """הזמנת חדר הישיבות: ישיבת צוות שבועית או עבודה משותפת של כמה מחלקות — אירוע אחד ביומן."""
+    names = [n for k, n, _, _ in DEPTS if k in (depts or [])]
+    if not _clip(topic):
+        return {"ok": False, "msg": "חסר נושא לישיבה"}
+    try:
+        start = datetime.strptime(f"{day} {at or '10:00'}", "%Y-%m-%d %H:%M").replace(tzinfo=tools_calendar.TZ)
+    except ValueError:
+        return {"ok": False, "msg": "תאריך או שעה לא תקינים"}
+    minutes = max(15, min(int(minutes or 60), 240))
+    title = f"🏛️ חדר ישיבות – {_clip(topic, 80)}" + (f" ({', '.join(names)})" if names else "")
+    tools_calendar._svc().events().insert(calendarId=tools_calendar.CALENDAR_ID, body={
+        "summary": title, "colorId": "11",
+        "description": "חדר הישיבות של המטה.\nמשתתפות: " + (", ".join(names) or "כל המחלקות") + "\nנקבע מהמטה באתר",
+        "start": {"dateTime": start.isoformat(), "timeZone": "Asia/Jerusalem"},
+        "end": {"dateTime": (start + timedelta(minutes=minutes)).isoformat(), "timeZone": "Asia/Jerusalem"},
+        "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 10}]}}).execute()
     return {"ok": True, "title": title}
 
 
@@ -268,6 +291,10 @@ async def api_action(action: str, request: Request):
         except ValueError:
             amount = 0
         return JSONResponse(add_expense(amount, str(data.get("what", "")), str(data.get("how", ""))))
+    if action == "room":
+        depts = data.get("depts") if isinstance(data.get("depts"), list) else []
+        return JSONResponse(book_room(str(data.get("topic", "")), str(data.get("day", "")), str(data.get("at", "")),
+                                      [str(d) for d in depts][:7], data.get("minutes") or 60))
     if action == "task":
         return JSONResponse(add_task(str(data.get("title", "")), str(data.get("day", "")), str(data.get("at", ""))))
     return JSONResponse({"ok": False}, status_code=404)
@@ -361,12 +388,28 @@ body.apple .it{background:var(--bg2);border:0;border-radius:14px}body.apple .it.
 body.apple button{border-color:var(--line);background:#eef2f6;color:var(--acc)}body.apple button.go{background:var(--acc);color:#fff}
 body.apple input{background:var(--bg2)}body.apple .al.late{animation:none}
 .look{font-size:12px;padding:5px 10px}
+.nav{display:flex;align-items:center;gap:8px;min-width:0}.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;flex:1;padding:2px}.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;white-space:nowrap}.chips button[aria-current=page]{background:var(--acc);color:#0d1a22;border-color:transparent}
+body.apple .chips button[aria-current=page]{color:#fff}
+.arr{font-size:20px;line-height:1;padding:4px 12px}
+.view{display:grid;gap:16px}.sub2{color:var(--mut);margin:-4px 0 12px;font-size:14px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px}@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.dhead{display:flex;align-items:center;gap:14px}.dhead .av{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:32px;background:var(--bg2);border:1px solid var(--line)}
+.dhead h2{margin:0;font-size:24px;color:var(--fg);letter-spacing:0}.dhead p{margin:2px 0 0;color:var(--mut)}
+.stat3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.stat3 div{background:var(--bg2);border-radius:12px;padding:10px;text-align:center}
+.stat3 b{display:block;font-size:28px;font-weight:300}.stat3 span{font-size:12px;color:var(--mut)}
+.table{position:relative;max-width:640px;margin:0 auto;aspect-ratio:1.35}
+.table svg{width:100%;height:100%;display:block}
+.who{display:flex;flex-wrap:wrap;gap:6px}.who label{display:flex;align-items:center;gap:4px;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+.who input{width:auto}
 </style></head><body>"""
 
 LOGIN_BODY = """<div class="card login"><p class="brand">● המטה של שולה</p><h1>שלום, יוסי</h1><p>{msg}</p></div>"""
 
 APP_BODY = r"""<div class="w">
 <header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><button type="button" class="look" id="look">🎨 מראה</button></header>
+<nav class="nav" aria-label="ניווט"><button type="button" class="arr" id="prev" aria-label="הקודם">›</button><div class="chips" id="chips"></div><button type="button" class="arr" id="next" aria-label="הבא">‹</button></nav>
+<div id="v-main" class="view">
 <section class="tiles" aria-label="מספרים">
  <div class="tile"><span>משימות היום</span><b id="t-open">–</b></div>
  <div class="tile hot"><span>באיחור</span><b id="t-late">–</b></div>
@@ -388,6 +431,18 @@ APP_BODY = r"""<div class="w">
    <p class="msg" id="msg"></p>
   </section>
   <section class="card"><h2>💰 החודש</h2><div class="money"><div class="out"><span>הוצאות</span><b id="m-out">–</b></div><div class="in"><span>הכנסות</span><b id="m-in">–</b></div></div></section>
+ </div>
+</div>
+</div>
+<div id="v-dept" class="view" hidden></div>
+<div id="v-room" class="view" hidden>
+ <section class="card"><h2>🪑 חדר הישיבות</h2><p class="sub2">כל מחלקה מדווחת: מה פתוח, מה באיחור ומה נעשה השבוע.</p><div class="table" id="table"></div></section>
+ <div class="grid2">
+  <section class="card"><h2>📋 סדר יום – מה צריך החלטה</h2><ul class="line" id="agenda"></ul></section>
+  <section class="card"><h2>📅 להזמין את החדר</h2>
+   <form id="room"><input name="topic" placeholder="נושא – למשל: ישיבת צוות שבועית" required><div class="row"><input name="day" type="date" required><input name="at" type="time" value="10:00"><input name="minutes" type="number" min="15" max="240" step="15" value="60" aria-label="דקות"></div>
+   <div class="who" id="who"></div><button class="go">להזמין את החדר</button></form><p class="msg" id="rmsg"></p>
+   <h2 style="margin-top:16px">🗓️ ישיבות קרובות</h2><ul class="line" id="meetings"></ul></section>
  </div>
 </div>
 </div>
@@ -418,13 +473,13 @@ function li(i,showDay){const el=document.createElement('li');el.className='it '+
 function fill(id,items,showDay,empty){const ul=$(id);ul.replaceChildren();if(!items.length){const e=document.createElement('li');e.className='empty';e.textContent=empty;ul.append(e);return;}
  const nowS=new Date().toTimeString().slice(0,5);let placed=id!=='#today';
  for(const i of items){if(!placed&&i.time&&i.time>nowS){const n=document.createElement('li');n.className='now';n.textContent='עכשיו '+nowS;ul.append(n);placed=true;}ul.append(li(i,showDay));}}
-async function load(){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401){location.reload();return;}const s=await r.json();
+async function load(){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401){location.reload();return;}const s=await r.json();S=s;
  $('#t-open').textContent=s.tiles.open;$('#t-late').textContent=s.tiles.late;$('#t-done').textContent=s.tiles.done7;$('#t-spent').textContent=nis(s.tiles.spent);
  $('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);radar(s.depts||[]);
  const al=$('#alerts');al.replaceChildren();if(!(s.alerts||[]).length){const e=document.createElement('div');e.className='empty';e.textContent='הכול שקט 🌿';al.append(e);}
  for(const a of s.alerts||[]){const e=document.createElement('div');e.className='al '+a.level;e.textContent=a.text;al.append(e);}
  fill('#today',s.today,false,'אין כלום ביומן היום 🌿');fill('#tomorrow',s.tomorrow,false,'מחר פנוי');fill('#late',s.late,true,'אין משימות באיחור 👏');
- $('#late-h').textContent='⏳ מחכה מימים קודמים ('+s.late.length+')';}catch(e){msg('לא הצלחתי לטעון. נסה לרענן.');}}
+ $('#late-h').textContent='⏳ מחכה מימים קודמים ('+s.late.length+')';render();}catch(e){msg('לא הצלחתי לטעון. נסה לרענן.');}}
 async function post(a,b){const r=await fetch('/hq/api/'+a,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-hq':'1'},body:JSON.stringify(b)});return r.json();}
 function msg(t){$('#msg').textContent=t;}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));$('#exp').hidden=b.dataset.f!=='exp';$('#task').hidden=b.dataset.f!=='task';});
@@ -435,5 +490,42 @@ const LOOKS=['war','apple'];function setLook(l){document.body.classList.toggle('
  const m=document.querySelector('meta[name=theme-color]');if(m)m.content=l==='apple'?'#f5f6f8':'#101c27';$('#look').textContent=l==='apple'?'🛰️ חדר מבצעים':'🍏 אפל נקי';}
 let look=new URLSearchParams(location.search).get('look');if(!LOOKS.includes(look)){try{look=localStorage.getItem('hq-look')}catch(e){}}setLook(LOOKS.includes(look)?look:'war');
 $('#look').onclick=()=>setLook(document.body.classList.contains('apple')?'war':'apple');
-tick();setInterval(tick,30000);load();setInterval(load,120000);
+const ROLES={cfo:'כספים ותזרים',finance:'CFO – תקציב וביטוחים',home:'הוצאות הבית',cmo:'שיווק ופוסטים',cto:'טכנולוגיה ואוטומציות',admin:'משימות והזמנות',personal:'כושר ואישי'};
+const PAGES=[{k:'main',l:'🏛️ המטה'},{k:'cfo',l:'💰 רייצ׳ל'},{k:'finance',l:'📊 רות'},{k:'home',l:'🏠 ננסי'},{k:'cmo',l:'📣 ג׳סיקה'},{k:'cto',l:'🧠 אמילי'},{k:'admin',l:'🗂️ סוזן'},{k:'personal',l:'❤️ ג׳ניפר'},{k:'room',l:'🪑 חדר ישיבות'}];
+let page='main',S=null;
+function chips(){const c=$('#chips');c.replaceChildren();for(const p of PAGES){const b=document.createElement('button');b.type='button';b.textContent=p.l;if(p.k===page)b.setAttribute('aria-current','page');b.onclick=()=>go(p.k);c.append(b);}
+ const cur=c.querySelector('[aria-current]');if(cur)cur.scrollIntoView({block:'nearest',inline:'center'});}
+function go(k){page=k;try{history.replaceState(null,'','#'+k)}catch(e){}$('#v-main').hidden=k!=='main';$('#v-room').hidden=k!=='room';$('#v-dept').hidden=(k==='main'||k==='room');chips();render();window.scrollTo({top:0,behavior:'smooth'});}
+function step(d){const i=PAGES.findIndex(p=>p.k===page);go(PAGES[(i+d+PAGES.length)%PAGES.length].k);}
+$('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
+let tx=null;document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});
+document.addEventListener('touchend',e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>70&&!e.target.closest('input,form,.chips'))step(dx>0?1:-1);},{passive:true});
+document.addEventListener('keydown',e=>{if(e.target.closest('input'))return;if(e.key==='ArrowLeft')step(1);if(e.key==='ArrowRight')step(-1);});
+function card(title,items,empty,showDay){const c=document.createElement('section');c.className='card';const h=document.createElement('h2');h.textContent=title;const ul=document.createElement('ul');ul.className='line';
+ if(!items.length){const e=document.createElement('li');e.className='empty';e.textContent=empty;ul.append(e);}else for(const i of items)ul.append(li(i,showDay));c.append(h,ul);return c;}
+function deptView(k){const v=$('#v-dept');v.replaceChildren();if(!S)return;const d=(S.depts||[]).find(x=>x.key===k);if(!d)return;
+ const head=document.createElement('section');head.className='card';const dh=document.createElement('div');dh.className='dhead';
+ const av=document.createElement('span');av.className='av';av.textContent=d.emoji;const tt=document.createElement('div');const h=document.createElement('h2');h.textContent=d.name;const p=document.createElement('p');p.textContent=ROLES[k]||'';tt.append(h,p);dh.append(av,tt);
+ const by=a=>(a||[]).filter(i=>i.dept===k);const st=document.createElement('div');st.className='stat3';
+ for(const [n,l,col] of [[by(S.today).filter(i=>i.can_done).length,'פתוחות היום',''],[by(S.late).length,'באיחור','var(--hot)'],[by(S.done_week).length,'בוצעו השבוע','var(--acc)']]){const x=document.createElement('div');const b=document.createElement('b');b.textContent=n;if(col)b.style.color=col;const sp=document.createElement('span');sp.textContent=l;x.append(b,sp);st.append(x);}
+ head.append(dh,st);const g=document.createElement('div');g.className='grid2';
+ const left=document.createElement('div');left.style.cssText='display:grid;gap:16px;align-content:start';left.append(card('☀️ היום',by(S.today),'אין משימות היום'),card('⏳ באיחור',by(S.late),'אין משימות באיחור 👏',true));
+ const right=document.createElement('div');right.style.cssText='display:grid;gap:16px;align-content:start';right.append(card('📅 השבוע הקרוב',by(S.week),'אין כלום ב-7 הימים הקרובים',true),card('✅ מה נעשה השבוע',by(S.done_week).slice(-15).reverse(),'עוד לא נרשם שום דבר השבוע',true));
+ g.append(left,right);v.append(head,g);}
+function roomView(){if(!S)return;const ns='http://www.w3.org/2000/svg';const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 540 430');svg.setAttribute('role','img');svg.setAttribute('aria-label','שולחן הישיבות');
+ const ds=S.depts||[];let h='<ellipse cx="270" cy="200" rx="145" ry="66" fill="var(--bg2)" stroke="var(--line)" stroke-width="2"/><text x="270" y="196" text-anchor="middle" font-size="16" fill="var(--mut)">ישיבת צוות</text><text x="270" y="218" text-anchor="middle" font-size="13" fill="var(--mut)">שולה מנחה</text>';
+ ds.forEach((d,i)=>{const a=-Math.PI/2+i*2*Math.PI/ds.length;const x=270+215*Math.cos(a),y=200+145*Math.sin(a);const c=d.late?C.late:d.open?C.open:C.ok;
+  const rep=d.late?d.late+' באיחור':d.open?d.open+' פתוחות':'הכול בסדר';
+  h+=`<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="27" fill="var(--card)" stroke="${c}" stroke-width="3"/><text x="${x.toFixed(0)}" y="${(y+8).toFixed(0)}" text-anchor="middle" font-size="24">${d.emoji}</text>`;
+  h+=`<text x="${x.toFixed(0)}" y="${(y+46).toFixed(0)}" text-anchor="middle" font-size="13" fill="var(--fg)">${d.name}</text><text x="${x.toFixed(0)}" y="${(y+62).toFixed(0)}" text-anchor="middle" font-size="11" fill="${c}">${rep}</text>`;});
+ svg.innerHTML=h;$('#table').replaceChildren(svg);
+ const ag=$('#agenda');ag.replaceChildren();const items=(S.late||[]).slice(-8).reverse();if(!items.length){const e=document.createElement('li');e.className='empty';e.textContent='אין נושאים פתוחים 👏';ag.append(e);}else items.forEach(i=>ag.append(li(i,true)));
+ const mt=$('#meetings');mt.replaceChildren();const ms=[...(S.today||[]),...(S.week||[])].filter(i=>i.title.startsWith('🏛️'));if(!ms.length){const e=document.createElement('li');e.className='empty';e.textContent='אין ישיבות קבועות עדיין';mt.append(e);}else ms.forEach(i=>mt.append(li(i,true)));
+ const who=$('#who');if(!who.children.length)for(const d of ds){const l=document.createElement('label');const c=document.createElement('input');c.type='checkbox';c.name='depts';c.value=d.key;c.checked=true;l.append(c,document.createTextNode(d.emoji+' '+d.name));who.append(l);}}
+function render(){if(page==='room')roomView();else if(page!=='main')deptView(page);}
+$('#room [name=day]').value=(()=>{const d=new Date();d.setDate(d.getDate()+((7-d.getDay())%7||7));return d.toISOString().slice(0,10)})();
+$('#room').onsubmit=async ev=>{ev.preventDefault();const f=ev.target;const body={topic:f.topic.value,day:f.day.value,at:f.at.value,minutes:f.minutes.value,depts:[...f.querySelectorAll('[name=depts]:checked')].map(x=>x.value)};
+ const b=f.querySelector('button.go');b.disabled=true;const r=await post('room',body);b.disabled=false;$('#rmsg').textContent=r.ok?'✅ נקבע ביומן: '+r.title:(r.msg||'לא הצליח');if(r.ok){f.topic.value='';load();}};
+const startPage=(location.hash||'').slice(1);page=PAGES.some(p=>p.k===startPage)?startPage:'main';
+tick();setInterval(tick,30000);go(page);load();setInterval(load,120000);
 </script>"""
