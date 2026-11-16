@@ -71,8 +71,21 @@ def hq_login_link() -> str:
 HQ_TOOLS = [hq_login_link]
 
 
-def _authed(request: Request) -> bool:
+# מצב בדיקה: יוסי ביקש (16.11) לפתוח את המטה בלי הגנה לשעתיים כדי לבדוק הכול, ורק אחר כך להפעיל הגנות.
+# אחרי השעה הזאת ההגנה חוזרת לבד. הגדרת Face ID / קוד גיבוי אפשרית רק עם כניסה אמיתית.
+OPEN_UNTIL = 1794857400  # 16.11.2026 21:30 שעון ישראל
+
+
+def _test_open() -> bool:
+    return time.time() < OPEN_UNTIL
+
+
+def _really_authed(request: Request) -> bool:
     return check_token(request.cookies.get(COOKIE, ""), "session")
+
+
+def _authed(request: Request) -> bool:
+    return _really_authed(request) or _test_open()
 
 
 # ---------- נתונים ----------
@@ -267,7 +280,11 @@ def login(t: str = ""):
 def home(request: Request):
     if not _authed(request):
         return HTMLResponse(_page(LOGIN_BODY.replace("{msg}", "פעם ראשונה, או שאין Face ID? כתוב לשולה בוואטסאפ: <b>כניסה למטה</b>")))
-    return HTMLResponse(_page(APP_BODY), headers={"Cache-Control": "no-store"})
+    body = APP_BODY
+    if _test_open() and not _really_authed(request):
+        body = ('<div class="card testbar">🧪 מצב בדיקה: המטה פתוח בלי הגנה עד 21:30. אחר כך ההגנה חוזרת לבד.</div>'
+                + body)
+    return HTMLResponse(_page(body), headers={"Cache-Control": "no-store"})
 
 
 @router.get("/hq/api/today")
@@ -331,8 +348,8 @@ async def auth_action(action: str, request: Request):
             return _session_response({"ok": True})
         msg = {"locked": "יותר מדי ניסיונות. נסה שוב בעוד רבע שעה.", "none": "עוד לא נוצר קוד גיבוי."}.get(res, "הקוד לא נכון.")
         return JSONResponse({"ok": False, "msg": msg}, status_code=401)
-    # מכאן — רק מי שכבר בפנים
-    if not _authed(request):
+    # מכאן — רק מי שבאמת נכנס (לא במצב בדיקה פתוח)
+    if not _really_authed(request):
         return JSONResponse({"ok": False}, status_code=401)
     if action == "status":
         return JSONResponse(hq_auth.status())
@@ -410,7 +427,7 @@ form{display:grid;gap:8px}input{font:inherit;padding:9px 11px;border-radius:10px
 .tabs{display:flex;gap:8px}.tabs button[aria-selected=true]{background:var(--acc);color:#0d1a22;border-color:transparent}
 details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .msg{font-size:12px;color:var(--mut);min-height:1em;margin:6px 0 0}
-.login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
+.login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}.testbar{max-width:1180px;margin:0 auto 16px;border-color:var(--amb);color:var(--amb);text-align:center;padding:10px}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
 .brand{color:var(--acc);font-weight:700;letter-spacing:.1em;font-size:12px;margin:0}
 /* ===== מראה 2: אפל נקי (body.apple) — לבן, שקט, הרבה מקום, מעט על המסך ===== */
 body.apple{--bg:#f5f6f8;--bg2:#f3f5f7;--card:#fff;--line:#e8ecf0;--fg:#1d2733;--mut:#7a8794;--acc:#6f8ba4;--amb:#c98a2e;--hot:#e26d5a;--sh:0 1px 2px rgba(20,30,45,.04),0 12px 32px rgba(20,30,45,.07);color-scheme:light;background:var(--bg);background-image:none}

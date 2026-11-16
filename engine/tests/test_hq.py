@@ -9,6 +9,7 @@ import tools_calendar
 
 def _client(monkeypatch, events=()):
     monkeypatch.setenv("HQ_SECRET", "test-secret")
+    monkeypatch.setattr(hq, "OPEN_UNTIL", 1)
     store = {e["id"]: e for e in events}
 
     class Cal:

@@ -16,6 +16,7 @@ def client(monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://shula.example.com")
     monkeypatch.setattr(google_auth, "is_connected", lambda: False)
     monkeypatch.setattr(hq_auth, "_cache", None)
+    monkeypatch.setattr(hq, "OPEN_UNTIL", 1)
     hq_auth._fails.clear()
     hq_auth._challenges.clear()
     import main
@@ -91,3 +92,17 @@ def test_app_refreshes_on_open(client):
     _login(client)
     html = client.get("/hq").text
     assert "visibilitychange" in html and "עודכן" in html and 'id="sec"' in html
+
+
+def test_test_mode_opens_but_not_settings(client, monkeypatch):
+    monkeypatch.setattr(hq, "OPEN_UNTIL", 4102444800)
+    monkeypatch.setattr(hq, "snapshot", lambda: {})
+    assert client.get("/hq/api/today").status_code == 200
+    assert "מצב בדיקה" in client.get("/hq").text
+    assert client.post("/hq/auth/register-options", headers=H, json={}).status_code == 401
+    assert client.post("/hq/auth/backup", headers=H, json={}).status_code == 401
+
+
+def test_test_mode_ends(client, monkeypatch):
+    monkeypatch.setattr(hq, "OPEN_UNTIL", 1)
+    assert client.get("/hq/api/today").status_code == 401
