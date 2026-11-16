@@ -157,3 +157,12 @@ def test_second_brain_reads_latest_review(monkeypatch):
     b = hq.second_brain()
     assert b["score"] == 6 and b["subject"].startswith("ביקורת") and "הצעד הבא: לסגור 3 משימות." in b["lines"]
     assert b["link"].startswith("https://mail.google.com/")
+
+
+def test_avatars_served_and_listed(monkeypatch):
+    c, _ = _client(monkeypatch)
+    assert {"shula", "cfo"} <= set(hq.avatars())
+    r = c.get("/hq/img/shula.jpg")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    assert c.get("/hq/img/..%2Fhq.jpg").status_code == 404
+    assert c.get("/hq/img/nope.jpg").status_code == 404

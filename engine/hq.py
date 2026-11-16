@@ -423,7 +423,7 @@ def login(t: str = ""):
 def home(request: Request):
     if not _authed(request):
         return HTMLResponse(_page(LOGIN_BODY.replace("{msg}", "פעם ראשונה, או שאין Face ID? כתוב לשולה בוואטסאפ: <b>כניסה למטה</b>")))
-    body = APP_BODY
+    body = APP_BODY.replace("/*AVATARS*/[]", json.dumps(avatars()))
     if _test_open() and not _really_authed(request):
         body = ('<div class="card testbar">🧪 מצב בדיקה: המטה פתוח בלי הגנה עד 21:30. אחר כך ההגנה חוזרת לבד.</div>'
                 + body)
@@ -435,6 +435,26 @@ def api_today(request: Request):
     if not _authed(request):
         return JSONResponse({"ok": False}, status_code=401)
     return JSONResponse(cached_snapshot(), headers={"Cache-Control": "no-store"})
+
+
+IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hq_img")
+
+
+def avatars() -> list:
+    """אילו תמונות פורטרט קיימות (shula + מפתחות המחלקות)."""
+    try:
+        return sorted(f[:-4] for f in os.listdir(IMG_DIR) if f.endswith(".jpg"))
+    except OSError:
+        return []
+
+
+@router.get("/hq/img/{name}.jpg")
+def hq_img(name: str):
+    from fastapi.responses import FileResponse, Response
+    if name not in avatars():
+        return Response(status_code=404)
+    return FileResponse(os.path.join(IMG_DIR, name + ".jpg"), media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/hq/api/money")
@@ -581,6 +601,8 @@ details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}
 .brain .bh{display:flex;align-items:center;gap:10px}.brain h2{flex:1;margin:0}.brain .score{font-size:26px;font-weight:300;color:var(--amb);font-variant-numeric:tabular-nums}
 .bl{list-style:none;margin:0;padding:0;display:grid;gap:4px}.bl li{line-height:1.5}.brain .src{display:inline-block;margin-top:8px;font-size:13px;color:var(--acc)}
+.avimg{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}.dhead .av{overflow:hidden;padding:0}
+.me{display:inline-flex}.meimg{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--acc)}.avsm{width:30px;height:30px;border-radius:50%;object-fit:cover;display:block}
 .mhead{display:flex;align-items:center;gap:8px}.mhead h2{flex:1;text-align:center;margin:0 0 10px}.arr.sm{width:30px;height:30px;font-size:16px;padding:0}
 .learn{list-style:none;margin:0;padding:0;display:grid;gap:8px}.learn li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 10px;background:var(--bg2);border-radius:12px;cursor:pointer}
 .learn .e{font-size:20px;grid-row:span 2}.learn .t{font-weight:500}.learn small{color:var(--mut);font-size:12px}
@@ -648,7 +670,7 @@ document.getElementById('codef').onsubmit=async ev=>{ev.preventDefault();const r
 </script>"""
 
 APP_BODY = r"""<div class="w">
-<header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><span class="upd" id="upd"></span><button type="button" class="look" id="refresh" aria-label="רענון">🔄</button><button type="button" class="look" id="sec">🔐 כניסה</button><button type="button" class="look" id="look">🎨 מראה</button></header>
+<header class="card bar"><span class="live"><i></i>פעיל</span><span class="me" id="me"></span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><span class="upd" id="upd"></span><button type="button" class="look" id="refresh" aria-label="רענון">🔄</button><button type="button" class="look" id="sec">🔐 כניסה</button><button type="button" class="look" id="look">🎨 מראה</button></header>
 <section class="card" id="secp" hidden><h2>🔐 כניסה בלי שולה</h2><p class="sub2" id="sec-st">בודק…</p><div class="row"><button type="button" class="go" id="sec-add">להגדיר Face ID במכשיר הזה</button><button type="button" class="go" id="sec-code">ליצור קוד גיבוי</button></div><div class="codebox" id="sec-show" hidden></div><p class="msg" id="sec-msg"></p><button type="button" class="look" id="sec-rm" hidden>למחוק את כל ה-Face ID</button></section>
 <nav class="nav" aria-label="ניווט"><button type="button" class="arr" id="prev" aria-label="הקודם">›</button><div class="chips" id="chips"></div><button type="button" class="arr" id="next" aria-label="הבא">‹</button></nav>
 <div id="v-main" class="view">
@@ -696,6 +718,7 @@ APP_BODY = r"""<div class="w">
 </div>
 <script>
 const $=s=>document.querySelector(s);
+const AV=/*AVATARS*/[];const avImg=(k,cls)=>{if(!AV.includes(k))return null;const i=document.createElement('img');i.src='/hq/img/'+k+'.jpg';i.alt='';i.className=cls||'avimg';return i;};
 const nis=n=>n.toLocaleString('he-IL')+'₪';
 const C={ok:'#5ec4b6',open:'#f2b866',late:'#ef8b7e'};
 function tick(){const d=new Date(),h=d.getHours();$('#hi').textContent=(h<5?'לילה טוב':h<12?'בוקר טוב':h<17?'צהריים טובים':h<21?'ערב טוב':'לילה טוב')+', יוסי';
@@ -754,7 +777,7 @@ function card(title,items,empty,showDay){const c=document.createElement('section
  if(!items.length){const e=document.createElement('li');e.className='empty';e.textContent=empty;ul.append(e);}else for(const i of items)ul.append(li(i,showDay));c.append(h,ul);return c;}
 function deptView(k){const v=$('#v-dept');v.replaceChildren();if(!S)return;const d=(S.depts||[]).find(x=>x.key===k);if(!d)return;
  const head=document.createElement('section');head.className='card';const dh=document.createElement('div');dh.className='dhead';
- const av=document.createElement('span');av.className='av';av.textContent=d.emoji;const tt=document.createElement('div');const h=document.createElement('h2');h.textContent=d.name;const p=document.createElement('p');p.textContent=ROLES[k]||'';tt.append(h,p);dh.append(av,tt);
+ const av=document.createElement('span');av.className='av';const pi=avImg(k);if(pi)av.append(pi);else av.textContent=d.emoji;const tt=document.createElement('div');const h=document.createElement('h2');h.textContent=d.name;const p=document.createElement('p');p.textContent=ROLES[k]||'';tt.append(h,p);dh.append(av,tt);
  const by=a=>(a||[]).filter(i=>i.dept===k);const st=document.createElement('div');st.className='stat3';
  for(const [n,l,col] of [[by(S.today).filter(i=>i.can_done).length,'פתוחות היום',''],[by(S.late).length,'באיחור','var(--hot)'],[by(S.done_week).length,'בוצעו השבוע','var(--acc)']]){const x=document.createElement('div');const b=document.createElement('b');b.textContent=n;if(col)b.style.color=col;const sp=document.createElement('span');sp.textContent=l;x.append(b,sp);st.append(x);}
  head.append(dh,st);const g=document.createElement('div');g.className='grid2';
@@ -795,7 +818,7 @@ function brain(b){const c=$('#brain');if(!b||!b.lines||!b.lines.length){c.hidden
  const body=b.lines.filter(t=>!/^ביקורת המוח השני/.test(t));fillB('#b-top',body.slice(0,5));fillB('#b-all',body.slice(5));
  const a=$('#b-link');if(/^https:\/\/mail\.google\.com\//.test(b.link||''))a.href=b.link;else a.hidden=true;}
 function learnList(L){const ul=$('#learn');ul.replaceChildren();const ds=(S&&S.depts)||[];let any=false;
- for(const d of ds){const l=L[d.key];if(!l||!l.topic)continue;any=true;const li=document.createElement('li');const e=document.createElement('span');e.className='e';e.textContent=d.emoji;
+ for(const d of ds){const l=L[d.key];if(!l||!l.topic)continue;any=true;const li=document.createElement('li');const e=document.createElement('span');e.className='e';const pi=avImg(d.key,'avsm');if(pi)e.append(pi);else e.textContent=d.emoji;
   const t=document.createElement('span');t.className='t';t.textContent=d.name+': '+l.topic;const sm=document.createElement('small');sm.textContent=(l.progress||'')+(l.status?' · '+l.status:'');li.append(e,t,sm);li.onclick=()=>go(d.key);ul.append(li);}
  if(!any){const e=document.createElement('li');e.className='empty';e.textContent='עוד אין נושאי לימוד';ul.append(e);}}
 function learnCard(k){const l=((S&&S.learning)||{})[k];const c=document.createElement('section');c.className='card';const h=document.createElement('h2');h.textContent='📚 לומדת החודש';c.append(h);
@@ -828,5 +851,6 @@ $('#sec-add').onclick=async()=>{const m=$('#sec-msg');if(!window.PublicKeyCreden
  }catch(e){m.textContent='ההגדרה בוטלה או לא הצליחה. נסה שוב.';}};
 $('#sec-code').onclick=async()=>{const r=await ap('backup');const b=$('#sec-show');b.textContent=r.code;b.hidden=false;$('#sec-msg').textContent=r.msg;secStatus();};
 $('#sec-rm').onclick=async()=>{const b=$('#sec-rm');if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='בטוח? ללחוץ שוב כדי למחוק';return;}const r=await ap('remove-passkeys');$('#sec-msg').textContent=r.msg;b.dataset.sure='';b.textContent='למחוק את כל ה-Face ID';secStatus();};
+{const si=avImg('shula','meimg');if(si){si.title='שולה – ראש המטה';$('#me').append(si);}}
 tick();setInterval(()=>{tick();upd();},30000);go(page);load();money('');setInterval(()=>{if(!document.hidden)load();},60000);
 </script>"""
