@@ -10,6 +10,7 @@ import tools_calendar
 def _client(monkeypatch, events=()):
     monkeypatch.setenv("HQ_SECRET", "test-secret")
     monkeypatch.setattr(hq, "OPEN_UNTIL", 1)
+    hq.clear_snapshot()
     store = {e["id"]: e for e in events}
 
     class Cal:
@@ -87,3 +88,14 @@ def test_book_the_meeting_room(monkeypatch):
     assert ev["colorId"] == "11" and ev["end"]["dateTime"].startswith("2026-11-22T11:00")
     s = c.get("/hq/api/today").json()
     assert "week" in s and "done_week" in s and all("dept" in i for i in s["today"])
+
+
+def test_snapshot_cache_cleared_by_actions(monkeypatch):
+    calls = []
+    monkeypatch.setattr(hq, "snapshot", lambda: calls.append(1) or {"n": len(calls)})
+    hq.clear_snapshot()
+    assert hq.cached_snapshot() == {"n": 1}
+    assert hq.cached_snapshot() == {"n": 1}
+    hq.clear_snapshot()
+    assert hq.cached_snapshot() == {"n": 2}
+    hq.clear_snapshot()
