@@ -277,6 +277,35 @@ def sync_monday_and_calendar(preview: bool = False) -> str:
         _lock.release()
 
 
+MIRROR_LOG = re.compile(r"^🤖 \d{1,2}\.\d{1,2}\.\d{4}")
+MIRROR_SEGMENTS = ("🩺 רופאים ומטפלים", "🤝 עמותות, מועדונים וקבוצות", "🏢 שותפים וחברות",
+                   "❤️ אנשים עם פרקינסון ומשפחות", "📇 אנשי קשר נוספים")
+
+
+def is_monday_mirror(e: dict) -> bool:
+    """אירוע ביומן שנוצר אוטומטית מ-monday בגלל שורה ששולה עצמה פתחה — יומן הפעולות של Claude (🤖 תאריך ...)
+    או איש קשר מסריקת aCare (... · 🩺 רופאים ומטפלים). בלי צבע ובלי סימון של שולה."""
+    if e.get("colorId") or (e.get("extendedProperties") or {}).get("private"):
+        return False
+    title = (e.get("summary") or "").strip()
+    return bool(MIRROR_LOG.match(title)) or any(title.endswith(" · " + s) for s in MIRROR_SEGMENTS)
+
+
+def clean_monday_mirror(days: int = 3) -> str:
+    """יוסי (16.11.2026): הלוגים לא אמורים להופיע ביומן. ב-monday יש חיבור שמעתיק כל שורה חדשה ליומן,
+    ולכן שורות ששולה פותחת בעצמה (יומן הפעולות של Claude, אנשי קשר מסריקת aCare) הופיעו כאירועים.
+    מוחקת רק אירועים כאלה, מ-days ימים אחורה עד days ימים קדימה. משימות ואירועים אמיתיים לא נוגעים."""
+    now = datetime.now(TZ)
+    svc, cal = tools_calendar._svc(), tools_calendar.CALENDAR_ID
+    gone = 0
+    for e in _list(timeMin=(now - timedelta(days=days)).isoformat(), timeMax=(now + timedelta(days=days)).isoformat(),
+                   singleEvents=True, showDeleted=False):
+        if is_monday_mirror(e):
+            svc.events().delete(calendarId=cal, eventId=e["id"]).execute()
+            gone += 1
+    return f"נוקו מהיומן {gone} העתקות אוטומטיות מ-monday." if gone else ""
+
+
 def _import_shares() -> None:
     try:
         import tools_posts
@@ -333,6 +362,12 @@ def daily_loop(check_every: int = 600) -> None:
                 log.exception("acare outreach scan failed")
         if last_hour != (now.date(), now.hour):
             last_hour = (now.date(), now.hour)
+            try:
+                out = clean_monday_mirror()
+                if out:
+                    log.info("monday mirror cleanup: %s", out)
+            except Exception:
+                log.exception("monday mirror cleanup failed")
             _import_shares()
             try:
                 import tools_hub
