@@ -642,7 +642,7 @@ APP_BODY = r"""<div class="w">
   <section class="card"><div class="mhead"><button type="button" class="arr sm" id="m-prev" aria-label="חודש קודם">›</button><h2 id="m-label">💰 החודש</h2><button type="button" class="arr sm" id="m-next" aria-label="חודש הבא">‹</button></div>
    <div class="money"><div class="out"><span>הוצאות</span><b id="m-out">–</b></div><div class="in"><span>הכנסות</span><b id="m-in">–</b></div></div>
    <p class="sub2" id="m-bal" style="margin:10px 0 0;text-align:center"></p>
-   <details style="margin-top:8px"><summary id="m-sum">פירוט החודש</summary><ul class="line" id="m-items" style="margin-top:8px;max-height:340px;overflow:auto"></ul></details></section>
+   <details style="margin-top:8px"><summary id="m-sum">פירוט החודש</summary><ul class="line" id="m-items" style="margin-top:8px"></ul></details></section>
   <section class="card"><h2>📚 מה המחלקות לומדות החודש</h2><ul class="learn" id="learn"></ul></section>
  </div>
 </div>
