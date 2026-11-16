@@ -300,15 +300,15 @@
     "semantic_hash": ""
   },
   "engine/hq.py": {
-    "mtime": 1794850465.857252,
-    "seen": 1794850479.2776768,
-    "ast_hash": "f9481cd4bee5cd07763fb65bef5d67cf",
+    "mtime": 1794850868.0012984,
+    "seen": 1794850884.7783387,
+    "ast_hash": "ed3b18a20a4b7b0cbaa8c243366e29be",
     "semantic_hash": ""
   },
   "engine/tests/test_hq.py": {
-    "mtime": 1794850465.8730335,
-    "seen": 1794850479.2776964,
-    "ast_hash": "5cca66ad66f425bc5aeb5331879eabcf",
+    "mtime": 1794850868.0020275,
+    "seen": 1794850884.7783577,
+    "ast_hash": "cb83ecb34294ed22b7a939c350bf4dd2",
     "semantic_hash": ""
   },
   "engine/hq_auth.py": {
