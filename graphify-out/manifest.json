@@ -300,15 +300,15 @@
     "semantic_hash": ""
   },
   "engine/hq.py": {
-    "mtime": 1794849633.3109035,
-    "seen": 1794849651.3752747,
-    "ast_hash": "ae544d661d46f937c100677d2a7fdadd",
+    "mtime": 1794850058.7949362,
+    "seen": 1794850120.9452934,
+    "ast_hash": "85b5cbf9b6cf8ad5d7ff476427e3f1f8",
     "semantic_hash": ""
   },
   "engine/tests/test_hq.py": {
-    "mtime": 1794849637.1398451,
-    "seen": 1794849651.375306,
-    "ast_hash": "a5ec75865f7016342111d24ebc714c6c",
+    "mtime": 1794850070.672109,
+    "seen": 1794850120.9453118,
+    "ast_hash": "53475679640bf684170bf9c0b791cc63",
     "semantic_hash": ""
   },
   "engine/hq_auth.py": {
@@ -318,8 +318,8 @@
     "semantic_hash": ""
   },
   "engine/tests/test_hq_auth.py": {
-    "mtime": 1794849637.1532815,
-    "seen": 1794849651.375308,
+    "mtime": 1794849662.7280848,
+    "seen": 1794850120.9453135,
     "ast_hash": "bacf784b66323ef8943dd91acbbb05d9",
     "semantic_hash": ""
   }
