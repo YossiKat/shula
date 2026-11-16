@@ -107,13 +107,17 @@ def test_money_month_full_month_and_details(monkeypatch):
         {"id": "a", "summary": "💸 הוצאה 100₪ – קפה", "colorId": "6", "start": {"dateTime": "2026-11-01T08:00:00+02:00"}},
         {"id": "b", "summary": "🚲 שיעור – 💰 הכנסה 400₪ ✅ שולם", "colorId": "10", "start": {"dateTime": "2026-11-13T10:00:00+02:00"}},
         {"id": "c", "summary": "💸 הוצאה 50₪ – אוקטובר", "colorId": "6", "start": {"dateTime": "2026-10-31T20:00:00+02:00"}},
-        {"id": "d", "summary": "💸 הוצאה 70₪ – סוף החודש", "colorId": "6", "start": {"dateTime": "2026-11-30T20:00:00+02:00"}},
+        {"id": "d", "summary": "💸 הוצאה 70₪ – סוף החודש", "colorId": "6", "start": {"dateTime": "2026-11-15T20:00:00+02:00"}},
+        {"id": "e", "summary": "לשלם ביטוח לאומי – 534 ₪", "colorId": "6", "start": {"dateTime": "2026-11-17T09:00:00+02:00"}},
+        {"id": "f", "summary": "🧾 לחייב את אלפא אומגה 380₪", "colorId": "6", "start": {"dateTime": "2026-11-16T09:00:00+02:00"}},
+        {"id": "g", "summary": "💸 הוצאה 99₪ – בעתיד", "colorId": "6", "start": {"dateTime": "2026-11-20T09:00:00+02:00"}},
     ]
     monkeypatch.setattr(hq, "_events", lambda a, b: [e for e in evs if a <= hq._start(e)[0] < b])
     m = hq.money_month("", now)
     assert m["ym"] == "2026-11" and m["label"] == "נובמבר 2026" and m["is_current"]
     assert (m["spent"], m["income"], m["balance"]) == (170, 400, 230)
     assert m["prev"] == "2026-10" and m["next"] == "2026-12"
+    assert [p["amount"] for p in m["planned"]] == [99]
     o = hq.money_month("2026-10", now)
     assert o["spent"] == 50 and not o["is_current"] and o["items"][0]["kind"] == "out"
 

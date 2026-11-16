@@ -118,6 +118,16 @@ def _amount(title: str) -> float:
     return float(m.group(1).replace(",", "")) if m else 0.0
 
 
+def _is_expense(e: dict) -> bool:
+    """הוצאה אמיתית: כתום (6) וכתוב בה 'הוצאה' או 💸. 'לשלם…' או 'לחייב…' הן משימות, לא הוצאה."""
+    t = e.get("summary") or ""
+    return e.get("colorId") == "6" and ("הוצאה" in t or "💸" in t)
+
+
+def _is_income(e: dict) -> bool:
+    return "הכנסה" in (e.get("summary") or "")
+
+
 def _visible(e: dict) -> bool:
     import tools_sync
     return e.get("status") != "cancelled" and not tools_sync.is_monday_mirror(e)
@@ -207,7 +217,7 @@ def money_month(ym: str = "", now: datetime | None = None) -> dict:
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     end = (start + timedelta(days=32)).replace(day=1)
     spent = income = 0.0
-    items = []
+    items, planned = [], []
     for e in _events(start, end):
         if not _visible(e):
             continue
@@ -218,19 +228,24 @@ def money_month(ym: str = "", now: datetime | None = None) -> dict:
         amt = _amount(title)
         if not amt:
             continue
-        if e.get("colorId") == "6":
+        kind = "out" if _is_expense(e) else "in" if _is_income(e) else ""
+        if not kind:
+            continue
+        if when > now:  # עוד לא קרה — מוצג בנפרד ולא נספר
+            planned.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": kind})
+            continue
+        if kind == "out":
             spent += amt
-            items.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": "out"})
-        elif "הכנסה" in title:
+        else:
             income += amt
-            items.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": "in"})
+        items.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": kind})
     items.sort(key=lambda i: i["day"], reverse=True)
     prev = (start - timedelta(days=1)).replace(day=1)
     return {"ym": start.strftime("%Y-%m"), "label": f"{HE_MONTHS[start.month - 1]} {start.year}",
             "prev": prev.strftime("%Y-%m"), "next": end.strftime("%Y-%m"), "is_current": start.month == now.month and start.year == now.year,
             "spent": round(spent), "income": round(income), "balance": round(income - spent),
             "n_out": sum(1 for i in items if i["kind"] == "out"), "n_in": sum(1 for i in items if i["kind"] == "in"),
-            "items": items[:300]}
+            "items": items[:300], "planned": sorted(planned, key=lambda i: i["day"])[:50]}
 
 
 _SNAP: dict = {"t": 0.0, "data": None}
@@ -260,13 +275,13 @@ def snapshot(now: datetime | None = None) -> dict:
         when, _ = _start(e)
         title = e.get("summary") or ""
         if when >= month and when < today + timedelta(days=1):
-            if e.get("colorId") == "6":
+            if _is_expense(e) and when <= now:
                 spent_month += _amount(title)
-            if "הכנסה" in title:
+            if _is_income(e) and when <= now:
                 income_month += _amount(title)
         if today <= when < today + timedelta(days=1):
             day_items.append(_item(e))
-            if e.get("colorId") == "6":
+            if _is_expense(e) and when <= now:
                 spent_today += _amount(title)
         elif today + timedelta(days=1) <= when < today + timedelta(days=8):
             week.append(_item(e))
@@ -735,8 +750,8 @@ async function money(ym){try{const r=await fetch('/hq/api/money'+(ym?'?m='+ym:''
  $('#m-bal').textContent=(m.balance>=0?'נשאר ':'חסר ')+nis(Math.abs(m.balance))+' · '+m.n_out+' הוצאות · '+m.n_in+' הכנסות';
  $('#m-next').disabled=m.is_current;$('#m-sum').textContent='פירוט '+m.label;
  const ul=$('#m-items');ul.replaceChildren();if(!m.items.length){const e=document.createElement('li');e.className='empty';e.textContent='אין הוצאות או הכנסות בחודש הזה';ul.append(e);}
- for(const i of m.items){const li=document.createElement('li');li.className='it '+(i.kind==='in'?'monday':'expense');const t=document.createElement('span');t.className='t';t.textContent=i.day.slice(8)+'.'+i.day.slice(5,7);
-  const d=document.createElement('span');d.className='d';const n=document.createElement('span');n.className='n';n.textContent=i.title;const a=document.createElement('b');a.textContent=(i.kind==='in'?'+':'−')+nis(i.amount);a.style.color=i.kind==='in'?'var(--acc)':'var(--amb)';li.append(t,d,n,a);ul.append(li);}
+ for(const i of [...(m.planned||[]).map(x=>({...x,pl:1})),...m.items]){const li=document.createElement('li');li.className='it '+(i.kind==='in'?'monday':'expense');const t=document.createElement('span');t.className='t';t.textContent=i.day.slice(8)+'.'+i.day.slice(5,7);
+  const d=document.createElement('span');d.className='d';const n=document.createElement('span');n.className='n';n.textContent=(i.pl?'⏳ צפוי: ':'')+i.title;if(i.pl)li.style.opacity='.6';const a=document.createElement('b');a.textContent=(i.kind==='in'?'+':'−')+nis(i.amount);a.style.color=i.kind==='in'?'var(--acc)':'var(--amb)';li.append(t,d,n,a);ul.append(li);}
 }catch(e){}}
 $('#m-prev').onclick=()=>money(MM.prev);$('#m-next').onclick=()=>{if(!MM.cur)money(MM.next);};
 function learnList(L){const ul=$('#learn');ul.replaceChildren();const ds=(S&&S.depts)||[];let any=false;
