@@ -64,3 +64,13 @@ def test_today_tiles_done_and_add(monkeypatch):
     r = c.post("/hq/api/expense", json={"amount": "45", "what": "קפה", "how": "כרטיס"}, headers={"x-hq": "1"}).json()
     assert r["ok"] and r["title"] == "💸 הוצאה 45₪ – קפה (כרטיס)"
     assert not c.post("/hq/api/task", json={"title": "x", "day": "bad", "at": "10:00"}, headers={"x-hq": "1"}).json()["ok"]
+
+
+def test_departments_and_alerts(monkeypatch):
+    evs = [_ev("a", "📣 ג׳סיקה: פוסט לאישור", "11", hours=8), _ev("d", "🧾 קבלה לאלפא אומגה", "11", days=-2)]
+    c, _ = _client(monkeypatch, evs)
+    c.cookies.set(hq.COOKIE, hq.make_token("session", 60))
+    s = c.get("/hq/api/today").json()
+    by = {d["key"]: d for d in s["depts"]}
+    assert len(s["depts"]) == 7 and by["cmo"]["open"] == 1 and by["cfo"]["late"] == 1
+    assert any(a["level"] == "late" and "קבלה" in a["text"] for a in s["alerts"])
