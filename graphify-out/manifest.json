@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "engine/requirements.txt": {
-    "mtime": 1794028933.4662344,
-    "seen": 1794730511.1782563,
-    "ast_hash": "d47453073d6c563d84197b50460b2cac",
+    "mtime": 1794848499.8898401,
+    "seen": 1794848571.072924,
+    "ast_hash": "c32003e44132c6cec77c614d7ab8a515",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -300,15 +300,27 @@
     "semantic_hash": ""
   },
   "engine/hq.py": {
-    "mtime": 1794823684.2771885,
-    "seen": 1794823690.2409382,
-    "ast_hash": "218c8839f4ebb75784381d190b14a6c7",
+    "mtime": 1794848517.8879545,
+    "seen": 1794848571.0727968,
+    "ast_hash": "98c1b991a40bf5293a6730fddf2f04c8",
     "semantic_hash": ""
   },
   "engine/tests/test_hq.py": {
-    "mtime": 1794823651.4022195,
-    "seen": 1794823690.2409666,
+    "mtime": 1794848397.3854105,
+    "seen": 1794848571.0728345,
     "ast_hash": "f98a9745390a0670dae07e2d4f8ee811",
+    "semantic_hash": ""
+  },
+  "engine/hq_auth.py": {
+    "mtime": 1794848459.9854143,
+    "seen": 1794848571.0728002,
+    "ast_hash": "e54eb06039629fb3af30af4d3427a5db",
+    "semantic_hash": ""
+  },
+  "engine/tests/test_hq_auth.py": {
+    "mtime": 1794848517.894285,
+    "seen": 1794848571.0728366,
+    "ast_hash": "5d66b8ab6f5ffa090f192bd3b24ad44f",
     "semantic_hash": ""
   }
 }

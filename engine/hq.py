@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+import hq_auth
 import tools_calendar
 
 router = APIRouter()
@@ -265,7 +266,7 @@ def login(t: str = ""):
 @router.get("/hq")
 def home(request: Request):
     if not _authed(request):
-        return HTMLResponse(_page(LOGIN_BODY.replace("{msg}", "כדי להיכנס, כתוב לשולה בוואטסאפ: <b>כניסה למטה</b>")))
+        return HTMLResponse(_page(LOGIN_BODY.replace("{msg}", "פעם ראשונה, או שאין Face ID? כתוב לשולה בוואטסאפ: <b>כניסה למטה</b>")))
     return HTMLResponse(_page(APP_BODY), headers={"Cache-Control": "no-store"})
 
 
@@ -297,6 +298,52 @@ async def api_action(action: str, request: Request):
                                       [str(d) for d in depts][:7], data.get("minutes") or 60))
     if action == "task":
         return JSONResponse(add_task(str(data.get("title", "")), str(data.get("day", "")), str(data.get("at", ""))))
+    return JSONResponse({"ok": False}, status_code=404)
+
+
+def _session_response(payload: dict) -> JSONResponse:
+    resp = JSONResponse(payload)
+    resp.set_cookie(COOKIE, make_token("session", SESSION_TTL), max_age=SESSION_TTL, httponly=True, secure=True, samesite="lax")
+    return resp
+
+
+@router.post("/hq/auth/{action}")
+async def auth_action(action: str, request: Request):
+    """כניסה בלי שולה: Face ID (passkey) או קוד גיבוי. ההגדרות עצמן רק מתוך המטה (אחרי כניסה)."""
+    if request.headers.get("x-hq") != "1":
+        return JSONResponse({"ok": False}, status_code=403)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    # פתוח לכולם — רק כדי להיכנס
+    if action == "login-options":
+        return JSONResponse(hq_auth.login_options())
+    if action == "login":
+        if hq_auth.login_verify(str(data.get("cid", "")), data.get("credential") or {}):
+            return _session_response({"ok": True})
+        return JSONResponse({"ok": False, "msg": "הזיהוי לא הצליח. נסה שוב."}, status_code=401)
+    if action == "code":
+        res = hq_auth.check_backup_code(str(data.get("code", "")))
+        if res == "ok":
+            return _session_response({"ok": True})
+        msg = {"locked": "יותר מדי ניסיונות. נסה שוב בעוד רבע שעה.", "none": "עוד לא נוצר קוד גיבוי."}.get(res, "הקוד לא נכון.")
+        return JSONResponse({"ok": False, "msg": msg}, status_code=401)
+    # מכאן — רק מי שכבר בפנים
+    if not _authed(request):
+        return JSONResponse({"ok": False}, status_code=401)
+    if action == "status":
+        return JSONResponse(hq_auth.status())
+    if action == "register-options":
+        return JSONResponse(hq_auth.register_options())
+    if action == "register":
+        return JSONResponse(hq_auth.register_verify(str(data.get("cid", "")), data.get("credential") or {}, str(data.get("name", ""))))
+    if action == "backup":
+        return JSONResponse(hq_auth.new_backup_code())
+    if action == "remove-passkeys":
+        return JSONResponse(hq_auth.remove_passkeys())
     return JSONResponse({"ok": False}, status_code=404)
 
 
@@ -363,7 +410,7 @@ form{display:grid;gap:8px}input{font:inherit;padding:9px 11px;border-radius:10px
 .tabs{display:flex;gap:8px}.tabs button[aria-selected=true]{background:var(--acc);color:#0d1a22;border-color:transparent}
 details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .msg{font-size:12px;color:var(--mut);min-height:1em;margin:6px 0 0}
-.login{max-width:420px;margin:14vh auto;text-align:center}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
+.login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
 .brand{color:var(--acc);font-weight:700;letter-spacing:.1em;font-size:12px;margin:0}
 /* ===== מראה 2: אפל נקי (body.apple) — לבן, שקט, הרבה מקום, מעט על המסך ===== */
 body.apple{--bg:#f5f6f8;--bg2:#f3f5f7;--card:#fff;--line:#e8ecf0;--fg:#1d2733;--mut:#7a8794;--acc:#6f8ba4;--amb:#c98a2e;--hot:#e26d5a;--sh:0 1px 2px rgba(20,30,45,.04),0 12px 32px rgba(20,30,45,.07);color-scheme:light;background:var(--bg);background-image:none}
@@ -404,10 +451,29 @@ body.apple .chips button[aria-current=page]{color:#fff}
 .who input{width:auto}
 </style></head><body>"""
 
-LOGIN_BODY = """<div class="card login"><p class="brand">● המטה של שולה</p><h1>שלום, יוסי</h1><p>{msg}</p></div>"""
+LOGIN_BODY = r"""<div class="card login"><p class="brand">● המטה של שולה</p><h1>שלום, יוסי</h1>
+<button type="button" class="go big" id="fid">🔐 כניסה עם Face ID</button>
+<details class="alt"><summary>יש לי קוד גיבוי</summary><form id="codef"><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="____-____-____" required><button class="go">כניסה</button></form></details>
+<p class="msg" id="lmsg"></p><p class="hint">{msg}</p></div>
+<script>
+const b2a=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0)).buffer;
+const a2b=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const ap=(u,b)=>fetch(u,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-hq':'1'},body:JSON.stringify(b||{})}).then(r=>r.json());
+const say=t=>{document.getElementById('lmsg').textContent=t;};
+document.getElementById('fid').onclick=async()=>{
+ if(!window.PublicKeyCredential){say('הדפדפן הזה לא תומך ב-Face ID. אפשר להיכנס עם קוד גיבוי.');return;}
+ try{const o=await ap('/hq/auth/login-options');if(!o.ok){say(o.msg);return;}
+  const pk=o.options;pk.challenge=b2a(pk.challenge);(pk.allowCredentials||[]).forEach(c=>c.id=b2a(c.id));
+  const c=await navigator.credentials.get({publicKey:pk});
+  const cred={id:c.id,rawId:a2b(c.rawId),type:c.type,response:{clientDataJSON:a2b(c.response.clientDataJSON),authenticatorData:a2b(c.response.authenticatorData),signature:a2b(c.response.signature),userHandle:c.response.userHandle?a2b(c.response.userHandle):null}};
+  const r=await ap('/hq/auth/login',{cid:o.cid,credential:cred});if(r.ok)location.replace('/hq');else say(r.msg||'לא הצליח');
+ }catch(e){say('הזיהוי בוטל או לא הצליח. נסה שוב.');}};
+document.getElementById('codef').onsubmit=async ev=>{ev.preventDefault();const r=await ap('/hq/auth/code',{code:ev.target.code.value});if(r.ok)location.replace('/hq');else say(r.msg||'לא הצליח');};
+</script>"""
 
 APP_BODY = r"""<div class="w">
-<header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><button type="button" class="look" id="look">🎨 מראה</button></header>
+<header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><span class="upd" id="upd"></span><button type="button" class="look" id="refresh" aria-label="רענון">🔄</button><button type="button" class="look" id="sec">🔐 כניסה</button><button type="button" class="look" id="look">🎨 מראה</button></header>
+<section class="card" id="secp" hidden><h2>🔐 כניסה בלי שולה</h2><p class="sub2" id="sec-st">בודק…</p><div class="row"><button type="button" class="go" id="sec-add">להגדיר Face ID במכשיר הזה</button><button type="button" class="go" id="sec-code">ליצור קוד גיבוי</button></div><div class="codebox" id="sec-show" hidden></div><p class="msg" id="sec-msg"></p><button type="button" class="look" id="sec-rm" hidden>למחוק את כל ה-Face ID</button></section>
 <nav class="nav" aria-label="ניווט"><button type="button" class="arr" id="prev" aria-label="הקודם">›</button><div class="chips" id="chips"></div><button type="button" class="arr" id="next" aria-label="הבא">‹</button></nav>
 <div id="v-main" class="view">
 <section class="tiles" aria-label="מספרים">
@@ -527,5 +593,25 @@ $('#room [name=day]').value=(()=>{const d=new Date();d.setDate(d.getDate()+((7-d
 $('#room').onsubmit=async ev=>{ev.preventDefault();const f=ev.target;const body={topic:f.topic.value,day:f.day.value,at:f.at.value,minutes:f.minutes.value,depts:[...f.querySelectorAll('[name=depts]:checked')].map(x=>x.value)};
  const b=f.querySelector('button.go');b.disabled=true;const r=await post('room',body);b.disabled=false;$('#rmsg').textContent=r.ok?'✅ נקבע ביומן: '+r.title:(r.msg||'לא הצליח');if(r.ok){f.topic.value='';load();}};
 const startPage=(location.hash||'').slice(1);page=PAGES.some(p=>p.k===startPage)?startPage:'main';
-tick();setInterval(tick,30000);go(page);load();setInterval(load,120000);
+let lastLoad=0;const _load=load;load=async function(){await _load();lastLoad=Date.now();upd();};
+function upd(){if(!lastLoad)return;const m=Math.round((Date.now()-lastLoad)/60000);$('#upd').textContent=m<1?'עודכן עכשיו':'עודכן לפני '+m+' דק׳';}
+$('#refresh').onclick=()=>load();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastLoad>20000)load();});
+window.addEventListener('focus',()=>{if(Date.now()-lastLoad>20000)load();});
+window.addEventListener('pageshow',e=>{if(e.persisted)load();});
+const b2a=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0)).buffer;
+const a2b=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const ap=(a,b)=>fetch('/hq/auth/'+a,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-hq':'1'},body:JSON.stringify(b||{})}).then(r=>r.json());
+async function secStatus(){const s=await ap('status');$('#sec-st').textContent=(s.passkeys?'✅ Face ID מוגדר ב-'+s.passkeys+' מכשירים ('+s.names.join(', ')+')':'Face ID עוד לא מוגדר.')+' · '+(s.backup?'✅ יש קוד גיבוי':'אין קוד גיבוי');$('#sec-rm').hidden=!s.passkeys;}
+$('#sec').onclick=()=>{const p=$('#secp');p.hidden=!p.hidden;if(!p.hidden)secStatus();};
+$('#sec-add').onclick=async()=>{const m=$('#sec-msg');if(!window.PublicKeyCredential){m.textContent='הדפדפן הזה לא תומך ב-Face ID.';return;}
+ try{const o=await ap('register-options');const pk=o.options;pk.challenge=b2a(pk.challenge);pk.user.id=b2a(pk.user.id);(pk.excludeCredentials||[]).forEach(c=>c.id=b2a(c.id));
+  const c=await navigator.credentials.create({publicKey:pk});
+  const name=/iPhone/.test(navigator.userAgent)?'אייפון':/iPad/.test(navigator.userAgent)?'אייפד':/Mac/.test(navigator.userAgent)?'מק':/Android/.test(navigator.userAgent)?'אנדרואיד':'מחשב';
+  const cred={id:c.id,rawId:a2b(c.rawId),type:c.type,response:{clientDataJSON:a2b(c.response.clientDataJSON),attestationObject:a2b(c.response.attestationObject),transports:c.response.getTransports?c.response.getTransports():[]}};
+  const r=await ap('register',{cid:o.cid,credential:cred,name});m.textContent=r.msg;secStatus();
+ }catch(e){m.textContent='ההגדרה בוטלה או לא הצליחה. נסה שוב.';}};
+$('#sec-code').onclick=async()=>{const r=await ap('backup');const b=$('#sec-show');b.textContent=r.code;b.hidden=false;$('#sec-msg').textContent=r.msg;secStatus();};
+$('#sec-rm').onclick=async()=>{const b=$('#sec-rm');if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='בטוח? ללחוץ שוב כדי למחוק';return;}const r=await ap('remove-passkeys');$('#sec-msg').textContent=r.msg;b.dataset.sure='';b.textContent='למחוק את כל ה-Face ID';secStatus();};
+tick();setInterval(()=>{tick();upd();},30000);go(page);load();setInterval(()=>{if(!document.hidden)load();},60000);
 </script>"""
