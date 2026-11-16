@@ -300,14 +300,14 @@
     "semantic_hash": ""
   },
   "engine/hq.py": {
-    "mtime": 1794822904.0492089,
-    "seen": 1794822949.4128718,
-    "ast_hash": "c44c854f338d4c303f2747fd7c0e34c0",
+    "mtime": 1794823463.3208249,
+    "seen": 1794823483.311115,
+    "ast_hash": "412ca3a86153807faf4e38357591b295",
     "semantic_hash": ""
   },
   "engine/tests/test_hq.py": {
-    "mtime": 1794822904.0495143,
-    "seen": 1794822949.4128897,
+    "mtime": 1794823449.052824,
+    "seen": 1794823483.3111336,
     "ast_hash": "4c43715562349da687e87889b6ecf037",
     "semantic_hash": ""
   }

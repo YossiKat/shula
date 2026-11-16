@@ -338,12 +338,35 @@ details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .msg{font-size:12px;color:var(--mut);min-height:1em;margin:6px 0 0}
 .login{max-width:420px;margin:14vh auto;text-align:center}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
 .brand{color:var(--acc);font-weight:700;letter-spacing:.1em;font-size:12px;margin:0}
+/* ===== מראה 2: אפל נקי (body.apple) — לבן, שקט, הרבה מקום, מעט על המסך ===== */
+body.apple{--bg:#f5f6f8;--bg2:#f3f5f7;--card:#fff;--line:#e8ecf0;--fg:#1d2733;--mut:#7a8794;--acc:#6f8ba4;--amb:#c98a2e;--hot:#e26d5a;--sh:0 1px 2px rgba(20,30,45,.04),0 12px 32px rgba(20,30,45,.07);color-scheme:light;background:var(--bg);background-image:none}
+body.apple .card,body.apple .tile{border:0;box-shadow:var(--sh);border-radius:24px;background:var(--card)}
+body.apple .tile:before{display:none}
+body.apple .bar{padding:28px 28px 22px;flex-direction:column;align-items:flex-start;gap:4px}
+body.apple .bar h1{font-family:Georgia,'Frank Ruhl Libre',serif;font-weight:300;font-size:clamp(34px,6vw,52px);order:-1}
+body.apple .bar .live{display:none}
+body.apple .tiles{grid-template-columns:repeat(3,minmax(0,1fr))}body.apple .tile.amb{display:none}
+body.apple .tile{text-align:center;padding:22px 12px}body.apple .tile span{font-size:14px;font-weight:600;color:var(--fg)}
+body.apple .tile b{font-size:52px;font-weight:300;color:var(--acc)}body.apple .tile.hot b{color:var(--hot)}
+body.apple .grid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+@media (max-width:1000px){body.apple .grid{grid-template-columns:1fr}}
+body.apple #c-radar{grid-column:1/-1;order:9}body.apple #c-radar .radar,body.apple #c-alerts{display:none}
+body.apple .legend{grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin:0}
+@media (max-width:700px){body.apple .legend{grid-template-columns:repeat(4,minmax(0,1fr))}}
+body.apple .legend div{flex-direction:column;gap:6px;text-align:center;font-size:13px;position:relative}
+body.apple .legend .e{order:-1;display:grid;place-items:center;width:52px;height:52px;margin:0 auto;border-radius:50%;background:var(--bg2);font-size:24px}
+body.apple .legend i{position:absolute;top:2px;inset-inline-end:calc(50% - 26px);width:12px;height:12px;border:2px solid #fff}
+body.apple .legend small{margin:0}
+body.apple .it{background:var(--bg2);border:0;border-radius:14px}body.apple .it.task{border:0}
+body.apple button{border-color:var(--line);background:#eef2f6;color:var(--acc)}body.apple button.go{background:var(--acc);color:#fff}
+body.apple input{background:var(--bg2)}body.apple .al.late{animation:none}
+.look{font-size:12px;padding:5px 10px}
 </style></head><body>"""
 
 LOGIN_BODY = """<div class="card login"><p class="brand">● המטה של שולה</p><h1>שלום, יוסי</h1><p>{msg}</p></div>"""
 
 APP_BODY = r"""<div class="w">
-<header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span></header>
+<header class="card bar"><span class="live"><i></i>פעיל</span><h1 id="hi">המטה של שולה</h1><span class="t" id="clock"></span><button type="button" class="look" id="look">🎨 מראה</button></header>
 <section class="tiles" aria-label="מספרים">
  <div class="tile"><span>משימות היום</span><b id="t-open">–</b></div>
  <div class="tile hot"><span>באיחור</span><b id="t-late">–</b></div>
@@ -351,13 +374,13 @@ APP_BODY = r"""<div class="w">
  <div class="tile amb"><span>הוצאות היום</span><b id="t-spent">–</b></div>
 </section>
 <div class="grid">
- <section class="card"><h2>🛰️ המחלקות – עכשיו</h2><div class="radar" id="radar"></div><div class="legend" id="legend"></div></section>
+ <section class="card" id="c-radar"><h2>🛰️ המחלקות – עכשיו</h2><div class="radar" id="radar"></div><div class="legend" id="legend"></div></section>
  <section class="card"><h2>☀️ היום שלי</h2><ul class="line" id="today"></ul>
   <details style="margin-top:12px"><summary id="late-h">⏳ מחכה מימים קודמים</summary><ul class="line" id="late" style="margin-top:8px"></ul></details>
   <details style="margin-top:8px"><summary>🌙 מחר</summary><ul class="line" id="tomorrow" style="margin-top:8px"></ul></details>
  </section>
  <div style="display:grid;gap:16px;align-content:start">
-  <section class="card"><h2>🚨 התראות</h2><div class="alerts" id="alerts"></div></section>
+  <section class="card" id="c-alerts"><h2>🚨 התראות</h2><div class="alerts" id="alerts"></div></section>
   <section class="card"><h2>➕ הוספה מהירה</h2>
    <div class="tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-f="exp">💸 הוצאה</button><button type="button" role="tab" aria-selected="false" data-f="task">📌 משימה</button></div>
    <form id="exp" style="margin-top:10px"><div class="row"><input name="amount" inputmode="decimal" placeholder="סכום ₪" required><input name="how" placeholder="איך שילמת"></div><input name="what" placeholder="על מה ואיפה" required><button class="go">לרשום ביומן</button></form>
@@ -386,7 +409,7 @@ function radar(depts){const ns='http://www.w3.org/2000/svg';const svg=document.c
   h+=`<text x="${(200+(r+(r>150?-22:22))*Math.cos(a)).toFixed(1)}" y="${(200+(r+(r>150?-22:22))*Math.sin(a)+5).toFixed(1)}" text-anchor="middle" font-size="15" fill="#e4edf3">${d.emoji}</text>`;});
  svg.innerHTML=h;$('#radar').replaceChildren(svg);
  const lg=$('#legend');lg.replaceChildren();for(const d of depts){const el=document.createElement('div');const i=document.createElement('i');i.style.background=d.late?C.late:d.open?C.open:C.ok;
-  const n=document.createElement('span');n.textContent=d.emoji+' '+d.name;const s=document.createElement('small');s.textContent=d.late?d.late+' באיחור':d.open?d.open+' פתוחות':'שקט';el.append(i,n,s);lg.append(el);}}
+  const e=document.createElement('span');e.className='e';e.textContent=d.emoji;const n=document.createElement('span');n.className='nm';n.textContent=d.name;const s=document.createElement('small');s.textContent=d.late?d.late+' באיחור':d.open?d.open+' פתוחות':'שקט';el.append(i,e,n,s);lg.append(el);}}
 function li(i,showDay){const el=document.createElement('li');el.className='it '+i.kind;
  const t=document.createElement('span');t.className='t';t.textContent=showDay?i.day.slice(8)+'.'+i.day.slice(5,7):(i.time||'כל היום');
  const d=document.createElement('span');d.className='d';const n=document.createElement('span');n.className='n';n.textContent=i.title;el.append(t,d,n);
@@ -408,5 +431,9 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.que
 $('#task [name=day]').value=new Date().toISOString().slice(0,10);
 for(const f of ['exp','task'])$('#'+f).onsubmit=async ev=>{ev.preventDefault();const fd=Object.fromEntries(new FormData(ev.target));const btn=ev.target.querySelector('button');btn.disabled=true;
  const r=await post(f==='exp'?'expense':'task',fd);btn.disabled=false;if(r.ok){msg('✅ נרשם: '+r.title);ev.target.reset();$('#task [name=day]').value=new Date().toISOString().slice(0,10);load();}else msg(r.msg||'לא הצליח');};
+const LOOKS=['war','apple'];function setLook(l){document.body.classList.toggle('apple',l==='apple');try{localStorage.setItem('hq-look',l)}catch(e){}
+ const m=document.querySelector('meta[name=theme-color]');if(m)m.content=l==='apple'?'#f5f6f8':'#101c27';$('#look').textContent=l==='apple'?'🛰️ חדר מבצעים':'🍏 אפל נקי';}
+let look=new URLSearchParams(location.search).get('look');if(!LOOKS.includes(look)){try{look=localStorage.getItem('hq-look')}catch(e){}}setLook(LOOKS.includes(look)?look:'war');
+$('#look').onclick=()=>setLook(document.body.classList.contains('apple')?'war':'apple');
 tick();setInterval(tick,30000);load();setInterval(load,120000);
 </script>"""
