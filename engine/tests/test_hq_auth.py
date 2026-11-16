@@ -17,6 +17,7 @@ def client(monkeypatch):
     monkeypatch.setattr(google_auth, "is_connected", lambda: False)
     monkeypatch.setattr(hq_auth, "_cache", None)
     monkeypatch.setattr(hq, "OPEN_UNTIL", 1)
+    hq.clear_snapshot()
     hq_auth._fails.clear()
     hq_auth._challenges.clear()
     import main

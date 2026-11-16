@@ -152,6 +152,21 @@ def dept_of(title: str) -> str:
     return "admin"
 
 
+_SNAP: dict = {"t": 0.0, "data": None}
+SNAP_TTL = 30
+
+
+def cached_snapshot() -> dict:
+    """אותה תמונת מצב למשך 30 שניות — שפתיחות ורענונים צמודים לא יחכו כל פעם ליומן. כל פעולה מנקה."""
+    if _SNAP["data"] is None or time.time() - _SNAP["t"] > SNAP_TTL:
+        _SNAP["data"], _SNAP["t"] = snapshot(), time.time()
+    return _SNAP["data"]
+
+
+def clear_snapshot() -> None:
+    _SNAP["data"] = None
+
+
 def snapshot(now: datetime | None = None) -> dict:
     now = now or datetime.now(tools_calendar.TZ)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -291,7 +306,7 @@ def home(request: Request):
 def api_today(request: Request):
     if not _authed(request):
         return JSONResponse({"ok": False}, status_code=401)
-    return JSONResponse(snapshot(), headers={"Cache-Control": "no-store"})
+    return JSONResponse(cached_snapshot(), headers={"Cache-Control": "no-store"})
 
 
 @router.post("/hq/api/{action}")
@@ -301,6 +316,7 @@ async def api_action(action: str, request: Request):
     if request.headers.get("x-hq") != "1":  # הגנה מטפסים זרים
         return JSONResponse({"ok": False}, status_code=403)
     data = await request.json()
+    clear_snapshot()
     if action == "done":
         return JSONResponse(mark_done(str(data.get("id", ""))))
     if action == "expense":
@@ -556,13 +572,14 @@ function li(i,showDay){const el=document.createElement('li');el.className='it '+
 function fill(id,items,showDay,empty){const ul=$(id);ul.replaceChildren();if(!items.length){const e=document.createElement('li');e.className='empty';e.textContent=empty;ul.append(e);return;}
  const nowS=new Date().toTimeString().slice(0,5);let placed=id!=='#today';
  for(const i of items){if(!placed&&i.time&&i.time>nowS){const n=document.createElement('li');n.className='now';n.textContent='עכשיו '+nowS;ul.append(n);placed=true;}ul.append(li(i,showDay));}}
-async function load(){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401){location.reload();return;}const s=await r.json();S=s;
+async function getToday(){for(let i=0;i<3;i++){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401)return 401;if(r.ok)return await r.json();}catch(e){}await new Promise(z=>setTimeout(z,2500*(i+1)));}throw new Error('load');}
+async function load(){try{$('#upd').textContent='מתעדכן…';const s=await getToday();if(s===401){location.reload();return;}S=s;if($('#msg').textContent.startsWith('לא הצלחתי לטעון'))msg('');
  $('#t-open').textContent=s.tiles.open;$('#t-late').textContent=s.tiles.late;$('#t-done').textContent=s.tiles.done7;$('#t-spent').textContent=nis(s.tiles.spent);
  $('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);radar(s.depts||[]);
  const al=$('#alerts');al.replaceChildren();if(!(s.alerts||[]).length){const e=document.createElement('div');e.className='empty';e.textContent='הכול שקט 🌿';al.append(e);}
  for(const a of s.alerts||[]){const e=document.createElement('div');e.className='al '+a.level;e.textContent=a.text;al.append(e);}
  fill('#today',s.today,false,'אין כלום ביומן היום 🌿');fill('#tomorrow',s.tomorrow,false,'מחר פנוי');fill('#late',s.late,true,'אין משימות באיחור 👏');
- $('#late-h').textContent='⏳ מחכה מימים קודמים ('+s.late.length+')';render();}catch(e){msg('לא הצלחתי לטעון. נסה לרענן.');}}
+ $('#late-h').textContent='⏳ מחכה מימים קודמים ('+s.late.length+')';render();}catch(e){msg('לא הצלחתי לטעון. נסה לרענן.');upd();}}
 async function post(a,b){const r=await fetch('/hq/api/'+a,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-hq':'1'},body:JSON.stringify(b)});return r.json();}
 function msg(t){$('#msg').textContent=t;}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));$('#exp').hidden=b.dataset.f!=='exp';$('#task').hidden=b.dataset.f!=='task';});
@@ -613,6 +630,7 @@ const startPage=(location.hash||'').slice(1);page=PAGES.some(p=>p.k===startPage)
 let lastLoad=0;const _load=load;load=async function(){await _load();lastLoad=Date.now();upd();};
 function upd(){if(!lastLoad)return;const m=Math.round((Date.now()-lastLoad)/60000);$('#upd').textContent=m<1?'עודכן עכשיו':'עודכן לפני '+m+' דק׳';}
 $('#refresh').onclick=()=>load();
+window.addEventListener('hashchange',()=>{const k=(location.hash||'').slice(1);if(k!==page&&PAGES.some(p=>p.k===k))go(k);});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastLoad>20000)load();});
 window.addEventListener('focus',()=>{if(Date.now()-lastLoad>20000)load();});
 window.addEventListener('pageshow',e=>{if(e.persisted)load();});
