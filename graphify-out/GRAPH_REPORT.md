@@ -1,17 +1,17 @@
 # Graph Report - shula  (2026-11-16)
 
 ## Corpus Check
-- 51 files · ~36,804 words
+- 51 files · ~36,911 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 1 file(s) not represented in the graph (top: (none) 1)
 
 ## Summary
-- 863 nodes · 1738 edges · 48 communities (38 shown, 10 thin omitted)
+- 867 nodes · 1749 edges · 47 communities (37 shown, 10 thin omitted)
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 84 edges (avg confidence: 0.85)
 - Token cost: 102,233 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `88af2578`
+- Built from commit: `94e91b12`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -32,7 +32,7 @@
 - Security Policy
 - CLAUDE.md
 - tools_posts.py
-- test_new_skills.py
+- _merge
 - voice.py
 - test_hub.py
 - test_new_skills.py
@@ -43,7 +43,7 @@
 - os
 - _query
 - _system_prompt
-- import_facebook_shares
+- service
 - tools_monday.py
 - whatsapp_webhook
 - hq_auth.py
@@ -56,10 +56,9 @@
 - reply
 - media.py
 - tools_claude_log.py
-- test_claude_brain.py
+- _reply_gemini
 - _safe
-- _Cal
-- move_posts_tracking
+- user_approved
 
 ## God Nodes (most connected - your core abstractions)
 1. `_query()` - 37 edges
@@ -93,31 +92,31 @@
 - **Prompt-file bot plugin mechanism** — readme_add_new_bot, readme_bots_folder, readme_github, readme_dashboard, engine_bots_core_shula_core_prompt [INFERRED 0.75]
 - **Google Workspace integration stack** — engine_bots_core_shula_calendar, engine_bots_core_shula_gmail, engine_bots_core_shula_drive, engine_requirements_google_api_python_client, engine_requirements_google_auth, engine_requirements_google_auth_oauthlib [INFERRED 0.85]
 
-## Communities (48 total, 10 thin omitted)
+## Communities (47 total, 10 thin omitted)
 
 ### Community 0 - "Python requirements"
 Cohesion: 0.07
 Nodes (34): AGENTS.md Agent Guidelines, Calendar capability, Calendar color codes, Capabilities list, Conversation memory, Core Shula system prompt, Drive capability, Gmail capability (+26 more)
 
 ### Community 1 - "shula_agent.py"
-Cohesion: 0.12
-Nodes (12): _agenda(), consume_approval(), _facts_text(), _learned_rules(), _log_usage(), _record_usage(), _reply_claude(), _reply_gemini() (+4 more)
+Cohesion: 0.16
+Nodes (8): _agenda(), consume_approval(), _facts_text(), _learned_rules(), _log_usage(), _record_usage(), _reply_claude(), _system_parts()
 
 ### Community 2 - "main.py"
-Cohesion: 0.13
-Nodes (10): exchange_code(), ask_shula(), google_auth_callback(), google_auth_start(), _key_ok(), _page(), root(), usage() (+2 more)
+Cohesion: 0.18
+Nodes (8): ask_shula(), google_auth_callback(), google_auth_start(), _key_ok(), _page(), root(), usage(), voice_clip()
 
 ### Community 3 - "test_email_gate.py"
-Cohesion: 0.21
-Nodes (8): _Gmail, _setup(), test_email_is_not_sent_without_yossis_ok(), test_email_is_sent_after_yossi_says_yes(), test_one_yes_sends_only_one_email(), test_ordinary_words_that_contain_yes_are_not_approval(), test_short_approvals_still_work(), send_email()
+Cohesion: 0.19
+Nodes (9): _Gmail, _setup(), test_email_content_is_marked_as_data(), test_email_is_not_sent_without_yossis_ok(), test_email_is_sent_after_yossi_says_yes(), test_one_yes_sends_only_one_email(), test_ordinary_words_that_contain_yes_are_not_approval(), test_short_approvals_still_work() (+1 more)
 
 ### Community 4 - "google_auth.py"
-Cohesion: 0.19
-Nodes (13): _account(), auth_url(), connected_accounts(), credentials(), _flow(), is_connected(), label(), pick() (+5 more)
+Cohesion: 0.24
+Nodes (9): _account(), auth_url(), connected_accounts(), credentials(), exchange_code(), _flow(), is_connected(), label() (+1 more)
 
 ### Community 5 - "tools_sync.py"
 Cohesion: 0.05
-Nodes (44): _FakeService, test_events_for_date_asks_for_that_whole_day(), test_events_for_date_empty_day(), test_board_summary_counts_groups_new_done_and_next7(), _item(), _own(), _setup(), test_changed_date_done_status_and_removed_date_are_followed() (+36 more)
+Nodes (45): _events(), _FakeService, test_events_for_date_asks_for_that_whole_day(), test_events_for_date_empty_day(), test_board_summary_counts_groups_new_done_and_next7(), _item(), _own(), _setup() (+37 more)
 
 ### Community 6 - "requests"
 Cohesion: 0.13
@@ -152,55 +151,55 @@ Cohesion: 0.67
 Nodes (3): Security Policy, Supported Versions table, Reporting a Vulnerability
 
 ### Community 15 - "tools_posts.py"
-Cohesion: 0.11
-Nodes (15): test_each_share_round_is_one_light_green_event_at_the_share_time(), test_next_organic_step_follows_the_share_data(), _csv(), _csv_with_header(), _existing_posts(), _local(), _monday_datetime(), _next_step() (+7 more)
+Cohesion: 0.06
+Nodes (35): _Cal, go(), _fake(), query(), test_each_share_round_is_one_light_green_event_at_the_share_time(), test_facebook_shares_are_grouped_under_their_post_and_never_twice(), test_first_measurement_and_posts_without_view_counts(), test_import_prepares_missing_columns_first() (+27 more)
 
-### Community 16 - "test_new_skills.py"
-Cohesion: 0.17
-Nodes (9): build_tools(), client(), run(), _text_of(), _to_messages(), tool_schema(), _user_content(), test_tool_schema_reads_signature_and_docstring() (+1 more)
+### Community 16 - "_merge"
+Cohesion: 0.27
+Nodes (7): _item(), test_first_sync_yossi_wins_but_never_clears_alpha_omega(), test_later_change_on_either_side_moves_across(), _fp(), _merge(), _norm(), _write()
 
 ### Community 17 - "voice.py"
-Cohesion: 0.19
-Nodes (8): _answer(), test_clean_for_speech(), clean_for_speech(), enabled(), speak(), _store(), synthesize(), VoiceAnswer
+Cohesion: 0.18
+Nodes (9): _answer(), test_clean_for_speech(), clean_for_speech(), enabled(), get_clip(), speak(), _store(), synthesize() (+1 more)
 
 ### Community 18 - "test_hub.py"
-Cohesion: 0.14
-Nodes (23): _cv(), _fake(), query(), _hubitem(), _item(), _row(), test_first_sync_yossi_wins_but_never_clears_alpha_omega(), test_hub_import_stops_at_the_limit() (+15 more)
+Cohesion: 0.22
+Nodes (16): _cv(), _fake(), query(), _hubitem(), _row(), test_hub_import_stops_at_the_limit(), test_hub_items_are_imported_with_their_columns(), test_live_sync_without_the_alpha_omega_key_explains() (+8 more)
 
 ### Community 19 - "test_new_skills.py"
-Cohesion: 0.10
-Nodes (16): choose_model(), _block(), _Seq, test_anycan_board_is_found_even_when_it_is_past_the_first_100(), test_anycan_monday_uses_its_own_token_and_finds_board_by_name(), post(), test_complex_requests_use_smart_model(), test_long_web_search_continues_after_pause() (+8 more)
+Cohesion: 0.06
+Nodes (30): build_tools(), choose_model(), client(), run(), _text_of(), _to_messages(), tool_schema(), _user_content() (+22 more)
 
 ### Community 20 - "re"
-Cohesion: 0.15
-Nodes (14): _it(), test_association_is_community_and_plain_task_is_skipped(), test_draft_language_follows_the_name_and_makes_no_medical_claims(), test_neurologist_with_email_is_a_clinic_contact(), test_tasks_patients_and_competitors_are_not_contacts(), test_work_plan_puts_clinicians_first_ten_per_week(), acare_outreach_scan(), _all_items() (+6 more)
+Cohesion: 0.16
+Nodes (12): _it(), test_association_is_community_and_plain_task_is_skipped(), test_draft_language_follows_the_name_and_makes_no_medical_claims(), test_neurologist_with_email_is_a_clinic_contact(), test_tasks_patients_and_competitors_are_not_contacts(), test_work_plan_puts_clinicians_first_ten_per_week(), classify(), _draft() (+4 more)
 
 ### Community 22 - "_safe_text"
-Cohesion: 0.22
-Nodes (7): _from_gemini_history(), _safe_text(), _NoText, test_calendar_text_is_marked_as_data(), test_safe_text_empty_when_nothing_returned(), test_safe_text_returns_text(), test_safe_text_survives_cut_off_reply()
+Cohesion: 0.24
+Nodes (6): _from_gemini_history(), _safe_text(), _NoText, test_safe_text_empty_when_nothing_returned(), test_safe_text_returns_text(), test_safe_text_survives_cut_off_reply()
 
 ### Community 23 - "hq.py"
 Cohesion: 0.06
-Nodes (47): add_expense(), add_task(), _amount(), api_action(), api_money(), api_today(), _authed(), book_room() (+39 more)
+Nodes (49): add_expense(), add_task(), _amount(), api_action(), api_money(), api_today(), _authed(), avatars() (+41 more)
 
 ### Community 25 - "_query"
-Cohesion: 0.16
-Nodes (17): _ao_by_ids(), _ao_items(), _copy_updates(), _create(), _ensure(), _fields(), import_content_hub(), _imported() (+9 more)
+Cohesion: 0.14
+Nodes (19): _ao_by_ids(), _ao_items(), _copy_updates(), _create(), _ensure(), _fields(), import_content_hub(), _imported() (+11 more)
 
 ### Community 26 - "_system_prompt"
-Cohesion: 0.25
-Nodes (6): forget_fact(), remember_fact(), _system_prompt(), test_self_check_is_in_prompt(), test_email_content_is_marked_as_data(), test_remember_and_forget_facts()
+Cohesion: 0.29
+Nodes (5): forget_fact(), remember_fact(), _system_prompt(), test_calendar_text_is_marked_as_data(), test_remember_and_forget_facts()
 
-### Community 27 - "import_facebook_shares"
-Cohesion: 0.22
-Nodes (13): _fake(), test_facebook_shares_are_grouped_under_their_post_and_never_twice(), test_first_measurement_and_posts_without_view_counts(), test_import_prepares_missing_columns_first(), test_import_stops_at_the_limit_and_says_what_is_left(), test_next_step_is_written_once_on_each_post_row(), test_post_row_gets_original_link_views_and_growth_percent(), test_setup_creates_only_what_is_missing() (+5 more)
+### Community 27 - "service"
+Cohesion: 0.48
+Nodes (4): service(), _find_file(), load(), save()
 
 ### Community 28 - "tools_monday.py"
 Cohesion: 0.17
-Nodes (6): _anycan_boards(), _format_board(), get_anycan_monday_items(), get_monday_items(), _board(), _board_items()
+Nodes (8): _board(), test_monday_updates_show_who_wrote_what(), _anycan_boards(), _format_board(), get_anycan_monday_items(), get_monday_items(), get_monday_updates(), _board_items()
 
 ### Community 29 - "whatsapp_webhook"
-Cohesion: 0.16
+Cohesion: 0.15
 Nodes (6): _can_push(), _collect(), _from_twilio(), _silent(), _twiml(), whatsapp_webhook()
 
 ### Community 31 - "hq_auth.py"
@@ -213,39 +212,35 @@ Nodes (6): client(), test_long_answer_is_not_spoken(), test_voice_failure_still_
 
 ### Community 33 - "tools_gmail.py"
 Cohesion: 0.18
-Nodes (10): split_id(), _body_text(), walk(), create_email_draft(), _gmail(), _header(), _make_raw(), read_email() (+2 more)
+Nodes (9): _body_text(), walk(), create_email_draft(), _gmail(), _header(), _make_raw(), read_email(), search_emails() (+1 more)
 
 ### Community 36 - "staff.py"
 Cohesion: 0.09
-Nodes (26): _board(), claude_action_name(), _cols(), dept_of_action(), focus_text(), _group_id(), import_claude_actions(), import_intel_actions() (+18 more)
+Nodes (25): claude_action_name(), _cols(), dept_of_action(), focus_text(), _group_id(), import_claude_actions(), import_intel_actions(), log_to_department() (+17 more)
 
 ### Community 37 - "_push_when_ready"
 Cohesion: 0.33
 Nodes (4): _push_when_ready(), run(), _send_whatsapp(), test_push_blocked_keeps_answer_for_nudge()
 
 ### Community 39 - "test_accounts.py"
-Cohesion: 0.21
-Nodes (4): _connect_both(), _Mail, test_email_search_covers_both_accounts(), test_reply_goes_out_from_the_account_it_came_to()
+Cohesion: 0.19
+Nodes (5): _connect_both(), _Mail, test_email_search_covers_both_accounts(), test_only_connected_accounts_are_searched(), test_reply_goes_out_from_the_account_it_came_to()
 
 ### Community 40 - "tools_drive.py"
 Cohesion: 0.16
-Nodes (6): tag_id(), test_drive_file_id_from_anycan_is_read_from_anycan(), test_ids_from_the_second_account_carry_its_name(), _drive(), read_drive_file(), search_drive()
+Nodes (7): split_id(), tag_id(), test_drive_file_id_from_anycan_is_read_from_anycan(), test_ids_from_the_second_account_carry_its_name(), _drive(), read_drive_file(), search_drive()
 
 ### Community 41 - "reply"
-Cohesion: 0.20
-Nodes (8): enabled(), _ensure_loaded(), forget(), _invalidate_agenda(), model_name(), reply(), usage_report(), test_falls_back_to_gemini_when_claude_fails()
+Cohesion: 0.22
+Nodes (7): enabled(), _ensure_loaded(), forget(), _invalidate_agenda(), model_name(), reply(), usage_report()
 
 ### Community 42 - "media.py"
-Cohesion: 0.22
+Cohesion: 0.20
 Nodes (6): download(), prepare(), show_typing(), transcribe(), _twilio_auth(), test_voice_note_is_transcribed()
 
-### Community 44 - "test_claude_brain.py"
-Cohesion: 0.24
-Nodes (5): _block(), _FakeClient, test_all_shula_tools_have_valid_schemas(), test_history_alternates_and_starts_with_user(), test_tool_loop_runs_tool_and_returns_answer()
-
-### Community 47 - "move_posts_tracking"
-Cohesion: 0.29
-Nodes (4): query(), test_tracking_moves_once_from_anycan_ai_to_the_supermetrics_board(), move_posts_tracking(), setup_posts_tracking()
+### Community 44 - "_reply_gemini"
+Cohesion: 0.50
+Nodes (3): _reply_gemini(), _to_gemini_history(), _tools_in_turn()
 
 ## Ambiguous Edges - Review These
 - `whatsapp_webhook()` → `twilio 9.3.7`  [AMBIGUOUS]
@@ -255,22 +250,22 @@ Nodes (4): query(), test_tracking_moves_once_from_anycan_ai_to_the_supermetrics_
 
 ## Knowledge Gaps
 - **6 isolated node(s):** `Conversation memory`, `Yossi Kat (user)`, `requests 2.32.3`, `Shulamit OS - Strategic Command Center`, `Supported Versions table` (+1 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 290 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 291 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `whatsapp_webhook()` connect `whatsapp_webhook` to `Python requirements`, `main.py`, `_push_when_ready`, `reply`, `media.py`, `voice.py`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
 - **What connects `Conversation memory`, `Yossi Kat (user)`, `requests 2.32.3` to the rest of the system?**
   _6 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Python requirements` be split into smaller, more focused modules?**
   _Cohesion score 0.07435897435897436 - nodes in this community are weakly interconnected._
 - **Why does `twilio 9.3.7` connect `Python requirements` to `whatsapp_webhook`?**
   _High betweenness centrality (0.080) - this node is a cross-community bridge._
-- **Should `shula_agent.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.11594202898550725 - nodes in this community are weakly interconnected._
+- **Should `tools_sync.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.052614052614052616 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._

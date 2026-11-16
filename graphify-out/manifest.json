@@ -300,15 +300,15 @@
     "semantic_hash": ""
   },
   "engine/hq.py": {
-    "mtime": 1794850868.0012984,
-    "seen": 1794850884.7783387,
-    "ast_hash": "ed3b18a20a4b7b0cbaa8c243366e29be",
+    "mtime": 1794852682.4966161,
+    "seen": 1794852704.3427665,
+    "ast_hash": "69c510788d284724bb03ed7fffa6c81d",
     "semantic_hash": ""
   },
   "engine/tests/test_hq.py": {
-    "mtime": 1794850868.0020275,
-    "seen": 1794850884.7783577,
-    "ast_hash": "cb83ecb34294ed22b7a939c350bf4dd2",
+    "mtime": 1794852688.5218744,
+    "seen": 1794852704.3427854,
+    "ast_hash": "4442435776f857ac228523a31aa3abb3",
     "semantic_hash": ""
   },
   "engine/hq_auth.py": {
@@ -321,6 +321,18 @@
     "mtime": 1794849662.7280848,
     "seen": 1794850120.9453135,
     "ast_hash": "bacf784b66323ef8943dd91acbbb05d9",
+    "semantic_hash": ""
+  },
+  "engine/hq_img/cfo.jpg": {
+    "mtime": 1794852670.4260907,
+    "seen": 1794852704.3428268,
+    "ast_hash": "f44e1fdb98390aeb8a06762792482ad5",
+    "semantic_hash": ""
+  },
+  "engine/hq_img/shula.jpg": {
+    "mtime": 1794852670.423076,
+    "seen": 1794852704.342828,
+    "ast_hash": "0ffa7a577af959aa7d8ebb4f0d56bca3",
     "semantic_hash": ""
   }
 }
