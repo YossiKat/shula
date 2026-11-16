@@ -37,9 +37,9 @@ def test_log_creates_missing_group_then_item(monkeypatch):
 
     out = staff.log_to_department("home", "הוצאה 21₪ – בית הלחם", "09:00")
     assert made[0] == ("7", "gnew", "הוצאה 21₪ – בית הלחם")
-    assert made[1][2] == "↗️ עדכון מננסי: הוצאה 21₪ – בית הלחם"  # ננסי מעדכנת את רייצ׳ל
+    assert made[1][2] == "↗️ עדכון מננסי: הוצאה 21₪ – בית הלחם"  # ננסי מעדכנת את יונתן
     assert "create_group" in calls and "create_update" in calls
-    assert "ננסי" in out and "רייצ׳ל" in out
+    assert "ננסי" in out and "יונתן" in out
 
     made.clear()
     staff.log_to_department("admin", "נשלח מייל לקאי")

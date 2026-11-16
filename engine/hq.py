@@ -145,7 +145,7 @@ def _item(e: dict) -> dict:
 
 
 DEPTS = [  # (מפתח, שם, אימוג'י, מילים בכותרת)
-    ("cfo", "רייצ׳ל", "💰", ("💰", "רייצ׳ל", "מוני", "הכנסה", "קבלה", "תשלום", "חשבונית")),
+    ("cfo", "יונתן", "💰", ("💰", "יונתן", "רייצ׳ל", "מוני", "הכנסה", "קבלה", "תשלום", "חשבונית")),
     ("finance", "רות", "📊", ("📊", "רות", "חסיה", "ביטוח", "תקציב")),
     ("home", "ננסי", "🏠", ("🏠", "ננסי", "בתיה", "💸")),
     ("cmo", "ג׳סיקה", "📣", ("📣", "ג׳סיקה", "שירי", "פוסט", "שיווק", "aCare", "AlphaCare")),
@@ -763,7 +763,7 @@ const LOOKS=['war','apple'];function setLook(l){document.body.classList.toggle('
 let look=new URLSearchParams(location.search).get('look');if(!LOOKS.includes(look)){try{look=localStorage.getItem('hq-look')}catch(e){}}setLook(LOOKS.includes(look)?look:'war');
 $('#look').onclick=()=>setLook(document.body.classList.contains('apple')?'war':'apple');
 const ROLES={cfo:'כספים ותזרים',finance:'CFO – תקציב וביטוחים',home:'הוצאות הבית',cmo:'שיווק ופוסטים',cto:'טכנולוגיה ואוטומציות',admin:'משימות והזמנות',personal:'כושר ואישי'};
-const PAGES=[{k:'main',l:'🏛️ המטה'},{k:'cfo',l:'💰 רייצ׳ל'},{k:'finance',l:'📊 רות'},{k:'home',l:'🏠 ננסי'},{k:'cmo',l:'📣 ג׳סיקה'},{k:'cto',l:'🧠 אמילי'},{k:'admin',l:'🗂️ סוזן'},{k:'personal',l:'❤️ ג׳ניפר'},{k:'room',l:'🪑 חדר ישיבות'}];
+const PAGES=[{k:'main',l:'🏛️ המטה'},{k:'cfo',l:'💰 יונתן'},{k:'finance',l:'📊 רות'},{k:'home',l:'🏠 ננסי'},{k:'cmo',l:'📣 ג׳סיקה'},{k:'cto',l:'🧠 אמילי'},{k:'admin',l:'🗂️ סוזן'},{k:'personal',l:'❤️ ג׳ניפר'},{k:'room',l:'🪑 חדר ישיבות'}];
 let page='main',S=null;
 function chips(){const c=$('#chips');c.replaceChildren();for(const p of PAGES){const b=document.createElement('button');b.type='button';b.textContent=p.l;if(p.k===page)b.setAttribute('aria-current','page');b.onclick=()=>go(p.k);c.append(b);}
  const cur=c.querySelector('[aria-current]');if(cur)cur.scrollIntoView({block:'nearest',inline:'center'});}

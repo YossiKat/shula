@@ -12,11 +12,11 @@ BOARD_NAME = tools_monday.ANYCAN_DEFAULT_BOARD  # AnyCan Ai
 # key: (שם, אמוג'י, תחום, קבוצה ב-monday, מילות מפתח, תיאור תפקיד)
 DEPARTMENTS = {
     "cfo": {
-        "name": "רייצ׳ל", "emoji": "💰", "title": "הנהלת חשבונות ותזרים",
-        "group": "💰 רייצ׳ל – כספים", "reports_to": "finance",
+        "name": "יונתן", "emoji": "💰", "title": "הנהלת חשבונות ותזרים",
+        "group": "💰 יונתן – כספים", "reports_to": "finance",
         "words": ("הכנסה", "חשבונית", "דרישת תשלום", "קבלה", "שכר", "ייעוץ", "דוח נסיעה", "מי חייב", "חוב", "לקוח שילם", "שולם",
                   "תזרים", "נכנס", "יצא", "יתרה", "הנהלת חשבונות", "רואה חשבון"),
-        "job": "רייצ׳ל הוא מנהל החשבונות: יודע כל שקל שיוצא וכל שקל שנכנס, ומנהל את התזרים. "
+        "job": "יונתן הוא מנהל החשבונות: יודע כל שקל שיוצא וכל שקל שנכנס, ומנהל את התזרים. "
                "הכנסות (ייעוץ לאלפא אומגה, AnyCan, שיעורי אופניים ורולרבליידס), דרישות תשלום, מי חייב כסף, דוחות נסיעה. "
                "מקבל עדכונים מננסי על כל הוצאה ותשלום, ומעדכן את רות. הכנסה נרשמת ביומן בירוק בהיר עם הסכום.",
     },
@@ -26,7 +26,7 @@ DEPARTMENTS = {
         "words": ("חיסכון", "חסכון", "ביטוח", "פוליסה", "הראל", "השקעה", "פנסיה", "קרן", "בנק", "משכנתא", "דוח חודשי",
                   "תכנון פיננסי", "תקציב שנתי", "בקרה", "מאזן", "רווח"),
         "job": "רות היא ה-CFO: רואה מלמעלה את החשבון, ההוצאות וכל הניהול הפיננסי, אחראית על התכנון הפיננסי ומבקרת. "
-               "מקבלת עדכונים מרייצ׳ל. חיסכונות, ביטוחים ופוליסות, השקעות ויעדים שנתיים. "
+               "מקבלת עדכונים מיונתן. חיסכונות, ביטוחים ופוליסות, השקעות ויעדים שנתיים. "
                "אף פעם לא ממליצה על קנייה או מכירה של מניות או השקעות — רק מסדרת מידע, מבקרת ומזכירה.",
     },
     "home": {
@@ -35,7 +35,7 @@ DEPARTMENTS = {
         "words": ("הוצאה", "קניתי", "שילמתי", "סופר", "קניות", "חשבון חשמל", "ארנונה", "מים", "גז", "סייל", "משלוח", "חבילה", "תקציב",
                   "אוכל", "וולט", "wolt", "הזמנת אוכל", "מכולת", "תשלום"),
         "job": "ננסי אחראית על כלכלת הבית: הוצאות שוטפות (נרשמות ביומן בכתום, 15 דקות, '💸 הוצאה X₪ – ...'), "
-               "תשלומים וחשבונות, הזמנות אוכל, קניות, סיילים ומשלוחים, ותקציב הבית. כל הוצאה ותשלום עוברים כעדכון לרייצ׳ל.",
+               "תשלומים וחשבונות, הזמנות אוכל, קניות, סיילים ומשלוחים, ותקציב הבית. כל הוצאה ותשלום עוברים כעדכון ליונתן.",
     },
     "cmo": {
         "name": "ג׳סיקה", "emoji": "📣", "title": "שיווק ומחקר שיווקי",
@@ -117,23 +117,31 @@ def _board() -> dict:
     return data["boards"][0]
 
 
-# השמות הקודמים של בעלות התפקידים (לפני נובמבר 2026). קבוצה ב-monday עם השם הישן מקבלת את השם החדש.
-OLD_NAMES = {'רייצ׳ל': 'מוני', 'רות': 'חסיה', 'ננסי': 'בתיה', 'ג׳סיקה': 'שירי', 'אמילי': 'רעיה', 'סוזן': 'סדרית', 'ג׳ניפר': 'לבנה'}
+# השמות הקודמים של בעלי התפקידים (מוני→רייצ׳ל בנובמבר 2026, רייצ׳ל→יונתן ב-16.11.2026). קבוצה ב-monday עם השם הישן מקבלת את השם החדש.
+OLD_NAMES = {'יונתן': ('רייצ׳ל', 'מוני'), 'רות': ('חסיה',), 'ננסי': ('בתיה',), 'ג׳סיקה': ('שירי',), 'אמילי': ('רעיה',), 'סוזן': ('סדרית',), 'ג׳ניפר': ('לבנה',)}
+
+
+def _old_titles(title: str) -> list:
+    """כל השמות הקודמים של קבוצה (16.11.2026: יונתן → יונתן; לפני כן מוני → יונתן)."""
+    out = []
+    for new, olds in OLD_NAMES.items():
+        if new in title:
+            out += [title.replace(new, old) for old in olds]
+    return out
 
 
 def _old_title(title: str) -> str:
-    for new, old in OLD_NAMES.items():
-        title = title.replace(new, old)
-    return title
+    olds = _old_titles(title)
+    return olds[0] if olds else title
 
 
 def _group_id(board: dict, title: str) -> str:
     for g in board.get("groups") or []:
         if g["title"].strip() == title:
             return g["id"]
-    old = _old_title(title)
+    olds = _old_titles(title)
     for g in board.get("groups") or []:
-        if old != title and g["title"].strip() == old:
+        if g["title"].strip() in olds:
             tools_monday._query("mutation ($b: ID!, $g: String!, $v: String!) { update_group(board_id: $b, group_id: $g, "
                                 "group_attribute: title, new_value: $v) { id } }",
                                 {"b": board["id"], "g": g["id"], "v": title}, "anycan")
@@ -145,7 +153,7 @@ def _group_id(board: dict, title: str) -> str:
 
 def log_to_department(department: str, title: str, details: str = "") -> str:
     """רושמת פעולה שבוצעה כשורה חדשה בקבוצה של המחלקה בלוח AnyCan Ai ב-monday של AnyCan.
-    department = cfo (רייצ׳ל, כספים) | finance (רות, ניהול פיננסי) | home (ננסי, כלכלת בית) | cmo (ג׳סיקה, שיווק) | cto (אמילי, טכנולוגיה ורעיונות) | admin (סוזן, אדמיניסטרציה) | personal (ג׳ניפר, אישי ויחסים)
+    department = cfo (יונתן, כספים) | finance (רות, ניהול פיננסי) | home (ננסי, כלכלת בית) | cmo (ג׳סיקה, שיווק) | cto (אמילי, טכנולוגיה ורעיונות) | admin (סוזן, אדמיניסטרציה) | personal (ג׳ניפר, אישי ויחסים)
     title = שם קצר לשורה, למשל 'הוצאה 21₪ – בית הלחם'
     details = פרטים נוספים (נכתבים כעדכון על השורה)"""
     d = DEPARTMENTS.get((department or "").strip().lower())
@@ -158,7 +166,7 @@ def log_to_department(department: str, title: str, details: str = "") -> str:
         tools_monday._query("mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }",
                             {"i": item, "b": details.strip()[:2000]}, "anycan")
     up = DEPARTMENTS.get(d.get("reports_to") or "")
-    if up:  # ננסי מעדכנת את רייצ׳ל, רייצ׳ל מעדכן את רות
+    if up:  # ננסי מעדכנת את יונתן, יונתן מעדכן את רות
         tools_hub._create(board["id"], _group_id(board, up["group"]), f"↗️ עדכון מ{d['name']}: {(title or '').strip()}"[:250], {}, "anycan")
         return f"נרשם ב-monday אצל {d['name']} ({d['title']}), ועדכון עבר ל{up['name']}."
     return f"נרשם ב-monday אצל {d['name']} ({d['title']}), בקבוצה '{d['group']}'."
@@ -173,7 +181,7 @@ import re
 
 INTEL_SUBJECT = 'דו"ח מודיעין יומי'
 _NAMES = {d["name"]: k for k, d in DEPARTMENTS.items()}
-_NAMES.update({OLD_NAMES[d["name"]]: k for k, d in DEPARTMENTS.items() if d["name"] in OLD_NAMES})  # דוחות ישנים
+_NAMES.update({old: k for k, d in DEPARTMENTS.items() for old in OLD_NAMES.get(d["name"], ())})  # דוחות ישנים
 _ACTION = re.compile(r"^\W*(" + "|".join(_NAMES) + r")\s*:\s*(.+)$")
 _URGENT = {"דחוף": "🔴 דחוף", "גבוהה": "🔴 דחוף", "חשוב": "🟠 חשוב", "בינונית": "🟠 חשוב", "רגיל": "🟢 רגיל", "נמוכה": "🟢 רגיל"}
 INTEL_COLS = (("🔥 דחיפות", "status"), ("📅 תאריך יעד", "date"), ("🧬 מקור", "text"))
@@ -296,7 +304,7 @@ def claude_action_name(row: list) -> str:
 
 def import_claude_actions(days: int = 2) -> str:
     """מכניסה ל-monday של AnyCan את הפעולות ש-Claude עשה בשביל יוסי (מהגיליון 'יומן הפעולות של Claude'):
-    כל פעולה היא שורה בקבוצה של המחלקה שעשתה אותה (רייצ׳ל, רות, ננסי, ג׳סיקה, אמילי, סוזן, ג׳ניפר), עם הפרטים כעדכון.
+    כל פעולה היא שורה בקבוצה של המחלקה שעשתה אותה (יונתן, רות, ננסי, ג׳סיקה, אמילי, סוזן, ג׳ניפר), עם הפרטים כעדכון.
     שורה שכבר נכנסה לא נכנסת שוב. רץ לבד כל בוקר ב-06:00 על היומיים האחרונים.
     השתמשי כשיוסי מבקש 'תכניסי את הפעולות של Claude למנדיי'."""
     import tools_claude_log
