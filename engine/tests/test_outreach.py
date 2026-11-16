@@ -30,3 +30,12 @@ def test_work_plan_puts_clinicians_first_ten_per_week():
     f += [{"seg": "clinic", "score": 5, "email": "", "phone": "1", "name": f"C{i}"} for i in range(8)]
     plan = o.work_plan(f)
     assert [p["seg"] for p in plan[:8]] == ["clinic"] * 8 and plan[9]["week"] == 1 and plan[10]["week"] == 2
+
+
+def test_tasks_patients_and_competitors_are_not_contacts():
+    for n in ("📊 Dashboard לרופאי הפיילוט", "17 | 🏓 PPP World Championship 2028", "Printing Digital Prescription — A5",
+              "Pessina — Patient", "Sunset Party — Official Announcement"):
+        assert not o.is_contact(n), n
+    for n in ("Tel Aviv Medical Center", "Dr. Gary Sharp — Out-Thinking Parkinson's", "עמותת פרקינסון ישראל"):
+        assert o.is_contact(n), n
+    assert "competitor" in o.SKIP_BOARDS

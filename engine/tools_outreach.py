@@ -17,7 +17,7 @@ import tools_monday
 log = logging.getLogger("shula.outreach")
 GROUP = "🤝 aCare – למי לספר"
 MAX_NEW = 150
-SKIP_BOARDS = ("budget", "inventory", "supermetrics", "social media schedule", "subitems")
+SKIP_BOARDS = ("budget", "inventory", "supermetrics", "social media schedule", "subitems", "competitor")
 SKIP_GROUP_WORDS = ("רייצ׳ל", "רות –", "ננסי", "ג׳סיקה", "ג׳ניפר", "automation issues", "todo", "aCare – למי לספר",
                     "פוסטים ושיתופים", "content hub")
 PARKINSON = ("parkinson", "פרקינסון", "ppp", "pingpongparkinson", "movement disorder", "dbs")
@@ -60,8 +60,24 @@ def _draft(seg: str, name: str) -> str:
             f"אנחנו מפתחים את aCare Home – אפליקציה שמלווה אנשים עם פרקינסון ובני משפחה ביום-יום. {body} יוסי קט")
 
 
+NOT_A_CONTACT = re.compile(r"^\s*(\d+\s*\||[^\w\s\"'(])")  # שורה שמתחילה באימוג׳י או במספר = משימה, לא איש קשר
+TASK_WORDS = ("dashboard", "goal", "party", "printing", "mapping", "countdown", "booth", "push to", "journalists", "plan",
+              "materials", "distribution", "meetings with", "content in", "score table", "competition", "championship",
+              "tier", "ambassador (", "יעד", "מעקב", "חומרי", "דף ", "גיוס", "לוח ", "מיפוי", "פוסט")
+PATIENT = re.compile(r"[—-]\s*patient\b", re.I)
+
+
+def is_contact(name: str) -> bool:
+    """שם של אדם או ארגון — לא משימה בקמפיין, ולא מטופל פרטי מהקמפיין."""
+    n = (name or "").strip()
+    low = n.lower()
+    return bool(n) and not NOT_A_CONTACT.match(n) and not PATIENT.search(n) and not any(w in low for w in TASK_WORDS)
+
+
 def classify(board: str, group: str, item: dict) -> dict | None:
     """מחזירה {seg, score, why, email, phone} לאיש קשר שכדאי לעדכן, או None."""
+    if not is_contact(item.get("name") or ""):
+        return None
     cols = item.get("column_values") or []
     email = next((c.get("text") for c in cols if c.get("type") == "email" and c.get("text")), "")
     phone = next((c.get("text") for c in cols if c.get("type") == "phone" and c.get("text")), "")
