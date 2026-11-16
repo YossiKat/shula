@@ -147,3 +147,13 @@ def test_preview_shows_what_would_happen_and_writes_nothing(monkeypatch):
     out = tools_sync.sync_monday_and_calendar(preview=True)
     assert "לא נכתב כלום" in out and "📋 Mayo Clinic · Follow up" in out and "יירשם ב-monday על Mayo Clinic" in out
     assert cal.calls == [] and updates == []
+
+
+def test_only_shula_made_mirrors_are_cleaned_from_the_calendar(monkeypatch):
+    soon = f"{SOON}T08:30:00+02:00"
+    evs = [{"id": "a", "summary": "Medtronic · 🩺 רופאים ומטפלים", "start": {"dateTime": soon}},
+           {"id": "b", "summary": "🤖 15.11.2026 21:10 · הכנסה 400₪", "start": {"dateTime": soon}},
+           {"id": "c", "summary": "📞 לבדוק עם דנה", "start": {"dateTime": soon}},
+           {"id": "d", "summary": "Medtronic · 🩺 רופאים ומטפלים", "colorId": "11", "start": {"dateTime": soon}}]
+    cal, _ = _setup(monkeypatch, [], evs)
+    assert "2 העתקות" in tools_sync.clean_monday_mirror() and set(cal.store) == {"c", "d"}
