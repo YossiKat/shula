@@ -99,3 +99,38 @@ def test_snapshot_cache_cleared_by_actions(monkeypatch):
     hq.clear_snapshot()
     assert hq.cached_snapshot() == {"n": 2}
     hq.clear_snapshot()
+
+
+def test_money_month_full_month_and_details(monkeypatch):
+    now = datetime(2026, 11, 16, 12, 0, tzinfo=tools_calendar.TZ)
+    evs = [
+        {"id": "a", "summary": "💸 הוצאה 100₪ – קפה", "colorId": "6", "start": {"dateTime": "2026-11-01T08:00:00+02:00"}},
+        {"id": "b", "summary": "🚲 שיעור – 💰 הכנסה 400₪ ✅ שולם", "colorId": "10", "start": {"dateTime": "2026-11-13T10:00:00+02:00"}},
+        {"id": "c", "summary": "💸 הוצאה 50₪ – אוקטובר", "colorId": "6", "start": {"dateTime": "2026-10-31T20:00:00+02:00"}},
+        {"id": "d", "summary": "💸 הוצאה 70₪ – סוף החודש", "colorId": "6", "start": {"dateTime": "2026-11-30T20:00:00+02:00"}},
+    ]
+    monkeypatch.setattr(hq, "_events", lambda a, b: [e for e in evs if a <= hq._start(e)[0] < b])
+    m = hq.money_month("", now)
+    assert m["ym"] == "2026-11" and m["label"] == "נובמבר 2026" and m["is_current"]
+    assert (m["spent"], m["income"], m["balance"]) == (170, 400, 230)
+    assert m["prev"] == "2026-10" and m["next"] == "2026-12"
+    o = hq.money_month("2026-10", now)
+    assert o["spent"] == 50 and not o["is_current"] and o["items"][0]["kind"] == "out"
+
+
+def test_learning_from_sheet(monkeypatch):
+    csv_text = ("dept,kind,topic,from,link,month,progress,lessons,apply,applyStatus,applyCheck,why,updated\n"
+                "cmo,learn,פתיחות לסרטונים,קונור,https://x.example,נובמבר 2026,שבוע 3,א | ב,3 פתיחות,פעיל,,יותר צפיות,15.11.2026\n"
+                "cmo,change,3 פתיחות,,,,,,כותבת 3 פתיחות,,,,15.11.2026\n")
+
+    class D:
+        def files(self):
+            return self
+        def export(self, fileId, mimeType):
+            return NS(execute=lambda: csv_text.encode())
+    import google_auth
+    monkeypatch.setattr(google_auth, "service", lambda *a, **k: D())
+    monkeypatch.setattr(hq, "_LEARN", {"t": 0.0, "data": {}})
+    L = hq.learning()
+    assert L["cmo"]["topic"] == "פתיחות לסרטונים" and L["cmo"]["lessons"] == ["א", "ב"]
+    assert L["cmo"]["status"] == "פעיל" and L["cmo"]["changes"][0]["name"] == "3 פתיחות"

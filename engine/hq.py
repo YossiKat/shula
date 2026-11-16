@@ -152,6 +152,87 @@ def dept_of(title: str) -> str:
     return "admin"
 
 
+# ---------- לימוד המחלקות ----------
+# הגיליון "המטה של שולה – לימוד המחלקות" בדרייב של יוסי. הסריקה השבועית של יום ראשון מעדכנת אותו.
+LEARN_FILE_ID = os.environ.get("HQ_LEARN_FILE_ID", "1pGwYLCnOTEiRgD327VEdu1HgCkG8MUTR27rPwvj9POQ")
+_LEARN: dict = {"t": 0.0, "data": {}}
+
+
+def learning() -> dict:
+    """{dept: {topic, from, link, month, progress, lessons[], apply, status, check, why, updated, changes[]}}. 10 דקות בזיכרון."""
+    if time.time() - _LEARN["t"] < 600:
+        return _LEARN["data"]
+    out: dict = {}
+    try:
+        import csv
+        import io
+        import google_auth
+        drive = google_auth.service("drive", "v3", google_auth.MAIN)
+        raw = drive.files().export(fileId=LEARN_FILE_ID, mimeType="text/csv").execute()
+        text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+        for r in csv.DictReader(io.StringIO(text)):
+            dept, kind = (r.get("dept") or "").strip(), (r.get("kind") or "").strip()
+            if not dept:
+                continue
+            d = out.setdefault(dept, {"changes": [], "learned": []})
+            if kind == "learn":
+                d.update({"topic": r.get("topic", ""), "from": r.get("from", ""), "link": r.get("link", ""),
+                          "month": r.get("month", ""), "progress": r.get("progress", ""),
+                          "lessons": [x.strip() for x in (r.get("lessons") or "").split("|") if x.strip()],
+                          "apply": r.get("apply", ""), "status": r.get("applyStatus", ""),
+                          "check": r.get("applyCheck", ""), "why": r.get("why", ""), "updated": r.get("updated", "")})
+            elif kind == "change":
+                d["changes"].append({"name": r.get("topic", ""), "what": r.get("apply", "")})
+            elif kind == "learned":
+                d["learned"].append({"topic": r.get("topic", ""), "month": r.get("month", "")})
+        _LEARN["data"], _LEARN["t"] = out, time.time()
+    except Exception:
+        import logging
+        logging.getLogger("shula.hq").exception("learning sheet read failed")
+        _LEARN["t"] = time.time() - 480  # ננסה שוב בעוד 2 דקות
+    return _LEARN["data"]
+
+
+# ---------- כסף לפי חודש ----------
+HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
+
+
+def money_month(ym: str = "", now: datetime | None = None) -> dict:
+    """הוצאות והכנסות של חודש שלם (1 בחודש עד סוף החודש), עם פירוט. ym = 'YYYY-MM' (ברירת מחדל: החודש הזה)."""
+    now = now or datetime.now(tools_calendar.TZ)
+    try:
+        y, m = (int(x) for x in ym.split("-"))
+        start = now.replace(year=y, month=m, day=1, hour=0, minute=0, second=0, microsecond=0)
+    except Exception:
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start + timedelta(days=32)).replace(day=1)
+    spent = income = 0.0
+    items = []
+    for e in _events(start, end):
+        if not _visible(e):
+            continue
+        title = e.get("summary") or ""
+        when, _ = _start(e)
+        if not (start <= when < end):
+            continue
+        amt = _amount(title)
+        if not amt:
+            continue
+        if e.get("colorId") == "6":
+            spent += amt
+            items.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": "out"})
+        elif "הכנסה" in title:
+            income += amt
+            items.append({"day": when.date().isoformat(), "title": _clip(title, 90), "amount": amt, "kind": "in"})
+    items.sort(key=lambda i: i["day"], reverse=True)
+    prev = (start - timedelta(days=1)).replace(day=1)
+    return {"ym": start.strftime("%Y-%m"), "label": f"{HE_MONTHS[start.month - 1]} {start.year}",
+            "prev": prev.strftime("%Y-%m"), "next": end.strftime("%Y-%m"), "is_current": start.month == now.month and start.year == now.year,
+            "spent": round(spent), "income": round(income), "balance": round(income - spent),
+            "n_out": sum(1 for i in items if i["kind"] == "out"), "n_in": sum(1 for i in items if i["kind"] == "in"),
+            "items": items[:300]}
+
+
 _SNAP: dict = {"t": 0.0, "data": None}
 SNAP_TTL = 30
 
@@ -212,6 +293,7 @@ def snapshot(now: datetime | None = None) -> dict:
     return {"depts": list(stats.values()), "alerts": alerts,"now": now.strftime("%H:%M"), "date": today.date().isoformat(),
             "tiles": {"open": open_today, "late": len(late), "done7": done7, "spent": round(spent_today)},
             "money": {"spent": round(spent_month), "income": round(income_month), "month": month.strftime("%m.%Y")},
+            "learning": learning(),
             "today": day_items, "tomorrow": tomorrow, "late": late[-20:], "week": week[:120], "done_week": done_week[-80:]}
 
 
@@ -307,6 +389,13 @@ def api_today(request: Request):
     if not _authed(request):
         return JSONResponse({"ok": False}, status_code=401)
     return JSONResponse(cached_snapshot(), headers={"Cache-Control": "no-store"})
+
+
+@router.get("/hq/api/money")
+def api_money(request: Request, m: str = ""):
+    if not _authed(request):
+        return JSONResponse({"ok": False}, status_code=401)
+    return JSONResponse(money_month(m), headers={"Cache-Control": "no-store"})
 
 
 @router.post("/hq/api/{action}")
@@ -443,7 +532,13 @@ form{display:grid;gap:8px}input{font:inherit;padding:9px 11px;border-radius:10px
 .tabs{display:flex;gap:8px}.tabs button[aria-selected=true]{background:var(--acc);color:#0d1a22;border-color:transparent}
 details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .msg{font-size:12px;color:var(--mut);min-height:1em;margin:6px 0 0}
-.login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}.testbar{max-width:1180px;margin:0 auto 16px;border-color:var(--amb);color:var(--amb);text-align:center;padding:10px}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
+.login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}
+.mhead{display:flex;align-items:center;gap:8px}.mhead h2{flex:1;text-align:center;margin:0 0 10px}.arr.sm{width:30px;height:30px;font-size:16px;padding:0}
+.learn{list-style:none;margin:0;padding:0;display:grid;gap:8px}.learn li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 10px;background:var(--bg2);border-radius:12px;cursor:pointer}
+.learn .e{font-size:20px;grid-row:span 2}.learn .t{font-weight:500}.learn small{color:var(--mut);font-size:12px}
+.lbox{display:grid;gap:10px}.lbox h3{margin:0;font-size:17px;font-weight:500}.lbox .src{font-size:13px;color:var(--mut)}.lbox .src a{color:var(--acc)}
+.lbox ul{margin:0;padding-inline-start:18px;display:grid;gap:4px}.lbox .ap{background:var(--bg2);border-radius:12px;padding:10px}.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);margin-inline-start:6px}
+.pill.ok{color:var(--acc);border-color:var(--acc)}.pill.wait{color:var(--amb);border-color:var(--amb)}.testbar{max-width:1180px;margin:0 auto 16px;border-color:var(--amb);color:var(--amb);text-align:center;padding:10px}.login h1{font-weight:300;font-size:34px;margin:6px 0}.login p{color:var(--mut)}
 .brand{color:var(--acc);font-weight:700;letter-spacing:.1em;font-size:12px;margin:0}
 /* ===== מראה 2: אפל נקי (body.apple) — לבן, שקט, הרבה מקום, מעט על המסך ===== */
 body.apple{--bg:#f5f6f8;--bg2:#f3f5f7;--card:#fff;--line:#e8ecf0;--fg:#1d2733;--mut:#7a8794;--acc:#6f8ba4;--amb:#c98a2e;--hot:#e26d5a;--sh:0 1px 2px rgba(20,30,45,.04),0 12px 32px rgba(20,30,45,.07);color-scheme:light;background:var(--bg);background-image:none}
@@ -529,7 +624,11 @@ APP_BODY = r"""<div class="w">
    <form id="task" hidden style="margin-top:10px"><input name="title" placeholder="מה צריך לעשות" required><div class="row"><input name="day" type="date" required><input name="at" type="time" value="10:00"></div><button class="go">להוסיף ליומן</button></form>
    <p class="msg" id="msg"></p>
   </section>
-  <section class="card"><h2>💰 החודש</h2><div class="money"><div class="out"><span>הוצאות</span><b id="m-out">–</b></div><div class="in"><span>הכנסות</span><b id="m-in">–</b></div></div></section>
+  <section class="card"><div class="mhead"><button type="button" class="arr sm" id="m-prev" aria-label="חודש קודם">›</button><h2 id="m-label">💰 החודש</h2><button type="button" class="arr sm" id="m-next" aria-label="חודש הבא">‹</button></div>
+   <div class="money"><div class="out"><span>הוצאות</span><b id="m-out">–</b></div><div class="in"><span>הכנסות</span><b id="m-in">–</b></div></div>
+   <p class="sub2" id="m-bal" style="margin:10px 0 0;text-align:center"></p>
+   <details style="margin-top:8px"><summary id="m-sum">פירוט החודש</summary><ul class="line" id="m-items" style="margin-top:8px;max-height:340px;overflow:auto"></ul></details></section>
+  <section class="card"><h2>📚 מה המחלקות לומדות החודש</h2><ul class="learn" id="learn"></ul></section>
  </div>
 </div>
 </div>
@@ -575,7 +674,7 @@ function fill(id,items,showDay,empty){const ul=$(id);ul.replaceChildren();if(!it
 async function getToday(){for(let i=0;i<3;i++){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401)return 401;if(r.ok)return await r.json();}catch(e){}await new Promise(z=>setTimeout(z,2500*(i+1)));}throw new Error('load');}
 async function load(){try{$('#upd').textContent='מתעדכן…';const s=await getToday();if(s===401){location.reload();return;}S=s;if($('#msg').textContent.startsWith('לא הצלחתי לטעון'))msg('');
  $('#t-open').textContent=s.tiles.open;$('#t-late').textContent=s.tiles.late;$('#t-done').textContent=s.tiles.done7;$('#t-spent').textContent=nis(s.tiles.spent);
- $('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);radar(s.depts||[]);
+ if(!MM.ym||MM.cur){$('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);}learnList(s.learning||{});radar(s.depts||[]);
  const al=$('#alerts');al.replaceChildren();if(!(s.alerts||[]).length){const e=document.createElement('div');e.className='empty';e.textContent='הכול שקט 🌿';al.append(e);}
  for(const a of s.alerts||[]){const e=document.createElement('div');e.className='al '+a.level;e.textContent=a.text;al.append(e);}
  fill('#today',s.today,false,'אין כלום ביומן היום 🌿');fill('#tomorrow',s.tomorrow,false,'מחר פנוי');fill('#late',s.late,true,'אין משימות באיחור 👏');
@@ -610,7 +709,7 @@ function deptView(k){const v=$('#v-dept');v.replaceChildren();if(!S)return;const
  for(const [n,l,col] of [[by(S.today).filter(i=>i.can_done).length,'פתוחות היום',''],[by(S.late).length,'באיחור','var(--hot)'],[by(S.done_week).length,'בוצעו השבוע','var(--acc)']]){const x=document.createElement('div');const b=document.createElement('b');b.textContent=n;if(col)b.style.color=col;const sp=document.createElement('span');sp.textContent=l;x.append(b,sp);st.append(x);}
  head.append(dh,st);const g=document.createElement('div');g.className='grid2';
  const left=document.createElement('div');left.style.cssText='display:grid;gap:16px;align-content:start';left.append(card('☀️ היום',by(S.today),'אין משימות היום'),card('⏳ באיחור',by(S.late),'אין משימות באיחור 👏',true));
- const right=document.createElement('div');right.style.cssText='display:grid;gap:16px;align-content:start';right.append(card('📅 השבוע הקרוב',by(S.week),'אין כלום ב-7 הימים הקרובים',true),card('✅ מה נעשה השבוע',by(S.done_week).slice(-15).reverse(),'עוד לא נרשם שום דבר השבוע',true));
+ const right=document.createElement('div');right.style.cssText='display:grid;gap:16px;align-content:start';right.append(learnCard(k),card('📅 השבוע הקרוב',by(S.week),'אין כלום ב-7 הימים הקרובים',true),card('✅ מה נעשה השבוע',by(S.done_week).slice(-15).reverse(),'עוד לא נרשם שום דבר השבוע',true));
  g.append(left,right);v.append(head,g);}
 function roomView(){if(!S)return;const ns='http://www.w3.org/2000/svg';const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 540 430');svg.setAttribute('role','img');svg.setAttribute('aria-label','שולחן הישיבות');
  const ds=S.depts||[];let h='<ellipse cx="270" cy="200" rx="145" ry="66" fill="var(--bg2)" stroke="var(--line)" stroke-width="2"/><text x="270" y="196" text-anchor="middle" font-size="16" fill="var(--mut)">ישיבת צוות</text><text x="270" y="218" text-anchor="middle" font-size="13" fill="var(--mut)">שולה מנחה</text>';
@@ -627,9 +726,35 @@ $('#room [name=day]').value=(()=>{const d=new Date();d.setDate(d.getDate()+((7-d
 $('#room').onsubmit=async ev=>{ev.preventDefault();const f=ev.target;const body={topic:f.topic.value,day:f.day.value,at:f.at.value,minutes:f.minutes.value,depts:[...f.querySelectorAll('[name=depts]:checked')].map(x=>x.value)};
  const b=f.querySelector('button.go');b.disabled=true;const r=await post('room',body);b.disabled=false;$('#rmsg').textContent=r.ok?'✅ נקבע ביומן: '+r.title:(r.msg||'לא הצליח');if(r.ok){f.topic.value='';load();}};
 const startPage=(location.hash||'').slice(1);page=PAGES.some(p=>p.k===startPage)?startPage:'main';
-let lastLoad=0;const _load=load;load=async function(){await _load();lastLoad=Date.now();upd();};
+let lastLoad=0;const _load=load;load=async function(){await _load();lastLoad=Date.now();upd();if(MM.ym)money(MM.cur?'':MM.ym);};
 function upd(){if(!lastLoad)return;const m=Math.round((Date.now()-lastLoad)/60000);$('#upd').textContent=m<1?'עודכן עכשיו':'עודכן לפני '+m+' דק׳';}
 $('#refresh').onclick=()=>load();
+const MM={ym:'',cur:true};
+async function money(ym){try{const r=await fetch('/hq/api/money'+(ym?'?m='+ym:''),{credentials:'same-origin'});if(!r.ok)return;const m=await r.json();MM.ym=m.ym;MM.cur=m.is_current;MM.prev=m.prev;MM.next=m.next;
+ $('#m-label').textContent='💰 '+m.label;$('#m-out').textContent=nis(m.spent);$('#m-in').textContent=nis(m.income);
+ $('#m-bal').textContent=(m.balance>=0?'נשאר ':'חסר ')+nis(Math.abs(m.balance))+' · '+m.n_out+' הוצאות · '+m.n_in+' הכנסות';
+ $('#m-next').disabled=m.is_current;$('#m-sum').textContent='פירוט '+m.label;
+ const ul=$('#m-items');ul.replaceChildren();if(!m.items.length){const e=document.createElement('li');e.className='empty';e.textContent='אין הוצאות או הכנסות בחודש הזה';ul.append(e);}
+ for(const i of m.items){const li=document.createElement('li');li.className='it '+(i.kind==='in'?'monday':'expense');const t=document.createElement('span');t.className='t';t.textContent=i.day.slice(8)+'.'+i.day.slice(5,7);
+  const d=document.createElement('span');d.className='d';const n=document.createElement('span');n.className='n';n.textContent=i.title;const a=document.createElement('b');a.textContent=(i.kind==='in'?'+':'−')+nis(i.amount);a.style.color=i.kind==='in'?'var(--acc)':'var(--amb)';li.append(t,d,n,a);ul.append(li);}
+}catch(e){}}
+$('#m-prev').onclick=()=>money(MM.prev);$('#m-next').onclick=()=>{if(!MM.cur)money(MM.next);};
+function learnList(L){const ul=$('#learn');ul.replaceChildren();const ds=(S&&S.depts)||[];let any=false;
+ for(const d of ds){const l=L[d.key];if(!l||!l.topic)continue;any=true;const li=document.createElement('li');const e=document.createElement('span');e.className='e';e.textContent=d.emoji;
+  const t=document.createElement('span');t.className='t';t.textContent=d.name+': '+l.topic;const sm=document.createElement('small');sm.textContent=(l.progress||'')+(l.status?' · '+l.status:'');li.append(e,t,sm);li.onclick=()=>go(d.key);ul.append(li);}
+ if(!any){const e=document.createElement('li');e.className='empty';e.textContent='עוד אין נושאי לימוד';ul.append(e);}}
+function learnCard(k){const l=((S&&S.learning)||{})[k];const c=document.createElement('section');c.className='card';const h=document.createElement('h2');h.textContent='📚 לומדת החודש';c.append(h);
+ const b=document.createElement('div');b.className='lbox';c.append(b);
+ if(!l||!l.topic){const p=document.createElement('p');p.className='sub2';p.textContent='עוד אין נושא לימוד החודש.';b.append(p);return c;}
+ const h3=document.createElement('h3');h3.textContent=l.topic;const src=document.createElement('div');src.className='src';src.append(document.createTextNode('ממי לומדים: '+(l.from||'')+' '));
+ if(/^https:\/\//.test(l.link||'')){const a=document.createElement('a');a.href=l.link;a.target='_blank';a.rel='noopener';a.textContent='למקור ↗';src.append(a);}
+ const pr=document.createElement('div');pr.className='src';pr.textContent=(l.month||'')+' · '+(l.progress||'')+(l.updated?' · עודכן '+l.updated:'');b.append(h3,src,pr);
+ if(l.why){const w=document.createElement('div');w.textContent='למה: '+l.why;b.append(w);}
+ if((l.lessons||[]).length){const t=document.createElement('div');t.textContent='מה למדה:';const ul=document.createElement('ul');for(const x of l.lessons){const li=document.createElement('li');li.textContent=x;ul.append(li);}b.append(t,ul);}
+ if(l.apply){const ap=document.createElement('div');ap.className='ap';ap.textContent='🔧 מה משתנה בעבודה: '+l.apply;if(l.status){const p=document.createElement('span');p.className='pill '+(l.status==='פעיל'?'ok':'wait');p.textContent=l.status;ap.append(p);}
+  if(l.check){const ck=document.createElement('div');ck.className='src';ck.textContent='בדיקה: '+l.check;ap.append(ck);}b.append(ap);}
+ if((l.changes||[]).length){const t=document.createElement('div');t.textContent='✅ שינויים שכבר עובדים:';const ul=document.createElement('ul');for(const x of l.changes){const li=document.createElement('li');li.textContent=x.name+(x.what?' – '+x.what:'');ul.append(li);}b.append(t,ul);}
+ return c;}
 window.addEventListener('hashchange',()=>{const k=(location.hash||'').slice(1);if(k!==page&&PAGES.some(p=>p.k===k))go(k);});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastLoad>20000)load();});
 window.addEventListener('focus',()=>{if(Date.now()-lastLoad>20000)load();});
@@ -648,5 +773,5 @@ $('#sec-add').onclick=async()=>{const m=$('#sec-msg');if(!window.PublicKeyCreden
  }catch(e){m.textContent='ההגדרה בוטלה או לא הצליחה. נסה שוב.';}};
 $('#sec-code').onclick=async()=>{const r=await ap('backup');const b=$('#sec-show');b.textContent=r.code;b.hidden=false;$('#sec-msg').textContent=r.msg;secStatus();};
 $('#sec-rm').onclick=async()=>{const b=$('#sec-rm');if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='בטוח? ללחוץ שוב כדי למחוק';return;}const r=await ap('remove-passkeys');$('#sec-msg').textContent=r.msg;b.dataset.sure='';b.textContent='למחוק את כל ה-Face ID';secStatus();};
-tick();setInterval(()=>{tick();upd();},30000);go(page);load();setInterval(()=>{if(!document.hidden)load();},60000);
+tick();setInterval(()=>{tick();upd();},30000);go(page);load();money('');setInterval(()=>{if(!document.hidden)load();},60000);
 </script>"""
