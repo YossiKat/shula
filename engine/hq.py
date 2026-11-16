@@ -203,6 +203,36 @@ def learning() -> dict:
     return _LEARN["data"]
 
 
+# ---------- המוח השני ----------
+# כל ערב מגיעה במייל "ביקורת המוח השני – DD.MM.YYYY" (ציון למטה, מה טוב, מה תקוע, הצעד הבא). כאן מציגים את האחרונה.
+_BRAIN: dict = {"t": 0.0, "data": {}}
+
+
+def second_brain() -> dict:
+    if time.time() - _BRAIN["t"] < 900:
+        return _BRAIN["data"]
+    out: dict = {}
+    try:
+        import tools_gmail
+        g = tools_gmail._gmail()
+        res = g.users().messages().list(userId="me", q='subject:"ביקורת המוח השני" newer_than:21d', maxResults=1).execute()
+        msgs = res.get("messages") or []
+        if msgs:
+            m = g.users().messages().get(userId="me", id=msgs[0]["id"], format="full").execute()
+            body = tools_gmail._body_text(m.get("payload", {}))
+            score = re.search(r"ציון[^\n:]*:\s*(\d+)\s*/\s*10", body)
+            lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+            out = {"subject": tools_gmail._header(m, "Subject"), "score": int(score.group(1)) if score else None,
+                   "lines": [_clip(ln, 300) for ln in lines[:60]],
+                   "link": f"https://mail.google.com/mail/u/0/#all/{msgs[0]['id']}"}
+        _BRAIN["data"], _BRAIN["t"] = out, time.time()
+    except Exception:
+        import logging
+        logging.getLogger("shula.hq").exception("second brain read failed")
+        _BRAIN["t"] = time.time() - 780
+    return _BRAIN["data"]
+
+
 # ---------- כסף לפי חודש ----------
 HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
 
@@ -309,6 +339,7 @@ def snapshot(now: datetime | None = None) -> dict:
             "tiles": {"open": open_today, "late": len(late), "done7": done7, "spent": round(spent_today)},
             "money": {"spent": round(spent_month), "income": round(income_month), "month": month.strftime("%m.%Y")},
             "learning": learning(),
+            "brain": second_brain(),
             "today": day_items, "tomorrow": tomorrow, "late": late[-20:], "week": week[:120], "done_week": done_week[-80:]}
 
 
@@ -548,6 +579,8 @@ form{display:grid;gap:8px}input{font:inherit;padding:9px 11px;border-radius:10px
 details summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:14px}
 .msg{font-size:12px;color:var(--mut);min-height:1em;margin:6px 0 0}
 .login{max-width:420px;margin:14vh auto;text-align:center;display:grid;gap:12px}.login .big{font-size:18px;padding:14px}.login .hint{font-size:13px}.login .alt summary{cursor:pointer;color:var(--mut)}.login .alt form{display:grid;gap:8px;margin-top:8px}.login .alt input{text-align:center;letter-spacing:.15em;font-size:20px}.codebox{font-size:26px;letter-spacing:.12em;text-align:center;padding:12px;border:1px dashed var(--acc);border-radius:12px;font-variant-numeric:tabular-nums;user-select:all}.upd{font-size:12px;color:var(--mut)}
+.brain .bh{display:flex;align-items:center;gap:10px}.brain h2{flex:1;margin:0}.brain .score{font-size:26px;font-weight:300;color:var(--amb);font-variant-numeric:tabular-nums}
+.bl{list-style:none;margin:0;padding:0;display:grid;gap:4px}.bl li{line-height:1.5}.brain .src{display:inline-block;margin-top:8px;font-size:13px;color:var(--acc)}
 .mhead{display:flex;align-items:center;gap:8px}.mhead h2{flex:1;text-align:center;margin:0 0 10px}.arr.sm{width:30px;height:30px;font-size:16px;padding:0}
 .learn{list-style:none;margin:0;padding:0;display:grid;gap:8px}.learn li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 10px;background:var(--bg2);border-radius:12px;cursor:pointer}
 .learn .e{font-size:20px;grid-row:span 2}.learn .t{font-weight:500}.learn small{color:var(--mut);font-size:12px}
@@ -619,6 +652,8 @@ APP_BODY = r"""<div class="w">
 <section class="card" id="secp" hidden><h2>🔐 כניסה בלי שולה</h2><p class="sub2" id="sec-st">בודק…</p><div class="row"><button type="button" class="go" id="sec-add">להגדיר Face ID במכשיר הזה</button><button type="button" class="go" id="sec-code">ליצור קוד גיבוי</button></div><div class="codebox" id="sec-show" hidden></div><p class="msg" id="sec-msg"></p><button type="button" class="look" id="sec-rm" hidden>למחוק את כל ה-Face ID</button></section>
 <nav class="nav" aria-label="ניווט"><button type="button" class="arr" id="prev" aria-label="הקודם">›</button><div class="chips" id="chips"></div><button type="button" class="arr" id="next" aria-label="הבא">‹</button></nav>
 <div id="v-main" class="view">
+<section class="card brain" id="brain" hidden><div class="bh"><h2>🧠 המוח השני – הביקורת האחרונה</h2><span class="score" id="b-score"></span></div><p class="sub2" id="b-sub"></p><ul class="bl" id="b-top"></ul>
+<details><summary>כל הביקורת</summary><ul class="bl" id="b-all" style="margin-top:8px"></ul></details><a class="src" id="b-link" target="_blank" rel="noopener">לפתוח את המייל ↗</a></section>
 <section class="tiles" aria-label="מספרים">
  <div class="tile"><span>משימות היום</span><b id="t-open">–</b></div>
  <div class="tile hot"><span>באיחור</span><b id="t-late">–</b></div>
@@ -689,7 +724,7 @@ function fill(id,items,showDay,empty){const ul=$(id);ul.replaceChildren();if(!it
 async function getToday(){for(let i=0;i<3;i++){try{const r=await fetch('/hq/api/today',{credentials:'same-origin'});if(r.status==401)return 401;if(r.ok)return await r.json();}catch(e){}await new Promise(z=>setTimeout(z,2500*(i+1)));}throw new Error('load');}
 async function load(){try{$('#upd').textContent='מתעדכן…';const s=await getToday();if(s===401){location.reload();return;}S=s;if($('#msg').textContent.startsWith('לא הצלחתי לטעון'))msg('');
  $('#t-open').textContent=s.tiles.open;$('#t-late').textContent=s.tiles.late;$('#t-done').textContent=s.tiles.done7;$('#t-spent').textContent=nis(s.tiles.spent);
- if(!MM.ym||MM.cur){$('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);}learnList(s.learning||{});radar(s.depts||[]);
+ if(!MM.ym||MM.cur){$('#m-out').textContent=nis(s.money.spent);$('#m-in').textContent=nis(s.money.income);}learnList(s.learning||{});brain(s.brain||{});radar(s.depts||[]);
  const al=$('#alerts');al.replaceChildren();if(!(s.alerts||[]).length){const e=document.createElement('div');e.className='empty';e.textContent='הכול שקט 🌿';al.append(e);}
  for(const a of s.alerts||[]){const e=document.createElement('div');e.className='al '+a.level;e.textContent=a.text;al.append(e);}
  fill('#today',s.today,false,'אין כלום ביומן היום 🌿');fill('#tomorrow',s.tomorrow,false,'מחר פנוי');fill('#late',s.late,true,'אין משימות באיחור 👏');
@@ -754,6 +789,11 @@ async function money(ym){try{const r=await fetch('/hq/api/money'+(ym?'?m='+ym:''
   const d=document.createElement('span');d.className='d';const n=document.createElement('span');n.className='n';n.textContent=(i.pl?'⏳ צפוי: ':'')+i.title;if(i.pl)li.style.opacity='.6';const a=document.createElement('b');a.textContent=(i.kind==='in'?'+':'−')+nis(i.amount);a.style.color=i.kind==='in'?'var(--acc)':'var(--amb)';li.append(t,d,n,a);ul.append(li);}
 }catch(e){}}
 $('#m-prev').onclick=()=>money(MM.prev);$('#m-next').onclick=()=>{if(!MM.cur)money(MM.next);};
+function brain(b){const c=$('#brain');if(!b||!b.lines||!b.lines.length){c.hidden=true;return;}c.hidden=false;
+ $('#b-score').textContent=b.score!=null?b.score+'/10':'';$('#b-sub').textContent=b.subject||'';
+ const fillB=(id,arr)=>{const ul=$(id);ul.replaceChildren();for(const t of arr){const li=document.createElement('li');li.textContent=t;ul.append(li);}};
+ const body=b.lines.filter(t=>!/^ביקורת המוח השני/.test(t));fillB('#b-top',body.slice(0,5));fillB('#b-all',body.slice(5));
+ const a=$('#b-link');if(/^https:\/\/mail\.google\.com\//.test(b.link||''))a.href=b.link;else a.hidden=true;}
 function learnList(L){const ul=$('#learn');ul.replaceChildren();const ds=(S&&S.depts)||[];let any=false;
  for(const d of ds){const l=L[d.key];if(!l||!l.topic)continue;any=true;const li=document.createElement('li');const e=document.createElement('span');e.className='e';e.textContent=d.emoji;
   const t=document.createElement('span');t.className='t';t.textContent=d.name+': '+l.topic;const sm=document.createElement('small');sm.textContent=(l.progress||'')+(l.status?' · '+l.status:'');li.append(e,t,sm);li.onclick=()=>go(d.key);ul.append(li);}

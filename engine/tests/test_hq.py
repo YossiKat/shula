@@ -138,3 +138,22 @@ def test_learning_from_sheet(monkeypatch):
     L = hq.learning()
     assert L["cmo"]["topic"] == "פתיחות לסרטונים" and L["cmo"]["lessons"] == ["א", "ב"]
     assert L["cmo"]["status"] == "פעיל" and L["cmo"]["changes"][0]["name"] == "3 פתיחות"
+
+
+def test_second_brain_reads_latest_review(monkeypatch):
+    import base64
+    import tools_gmail
+    body = "🧠 ביקורת המוח השני – 15.11.2026\nציון למטה: 6/10\nמה טוב - הכסף נאסף.\nהצעד הבא: לסגור 3 משימות."
+    msg = {"id": "m1", "payload": {"mimeType": "text/plain", "headers": [{"name": "Subject", "value": "ביקורת המוח השני – 15.11.2026"}],
+                                   "body": {"data": base64.urlsafe_b64encode(body.encode()).decode()}}}
+
+    class G:
+        def users(self): return self
+        def messages(self): return self
+        def list(self, **kw): return NS(execute=lambda: {"messages": [{"id": "m1"}]})
+        def get(self, **kw): return NS(execute=lambda: msg)
+    monkeypatch.setattr(tools_gmail, "_gmail", lambda *a, **k: G())
+    monkeypatch.setattr(hq, "_BRAIN", {"t": 0.0, "data": {}})
+    b = hq.second_brain()
+    assert b["score"] == 6 and b["subject"].startswith("ביקורת") and "הצעד הבא: לסגור 3 משימות." in b["lines"]
+    assert b["link"].startswith("https://mail.google.com/")
