@@ -74,7 +74,7 @@ def test_departments_and_alerts(monkeypatch):
     c.cookies.set(hq.COOKIE, hq.make_token("session", 60))
     s = c.get("/hq/api/today").json()
     by = {d["key"]: d for d in s["depts"]}
-    assert len(s["depts"]) == 9 and by["cmo"]["open"] == 1 and by["cfo"]["late"] == 1
+    assert len(s["depts"]) == 10 and by["cmo"]["open"] == 1 and by["cfo"]["late"] == 1
     assert any(a["level"] == "late" and "קבלה" in a["text"] for a in s["alerts"])
 
 
