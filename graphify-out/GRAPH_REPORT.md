@@ -1,7 +1,7 @@
-# Graph Report - shula  (2026-11-16)
+# Graph Report - shula  (2026-11-17)
 
 ## Corpus Check
-- 51 files · ~36,952 words
+- 51 files · ~37,071 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 1 file(s) not represented in the graph (top: (none) 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 102,233 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `445d0ff9`
+- Built from commit: `5eebea85`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

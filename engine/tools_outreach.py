@@ -18,7 +18,7 @@ log = logging.getLogger("shula.outreach")
 GROUP = "🤝 aCare – למי לספר"
 MAX_NEW = 150
 SKIP_BOARDS = ("budget", "inventory", "supermetrics", "social media schedule", "subitems", "competitor")
-SKIP_GROUP_WORDS = ("יונתן", "רייצ׳ל", "רות –", "ננסי", "ג׳סיקה", "ג׳ניפר", "automation issues", "todo", "aCare – למי לספר",
+SKIP_GROUP_WORDS = ("יונתן", "רייצ׳ל", "רות –", "ננסי", "ג׳סיקה", "ג׳ניפר", "אוליביה", "automation issues", "todo", "aCare – למי לספר",
                     "פוסטים ושיתופים", "content hub")
 PARKINSON = ("parkinson", "פרקינסון", "ppp", "pingpongparkinson", "movement disorder", "dbs")
 SEGMENTS = [  # (מפתח, שם, מילים)
