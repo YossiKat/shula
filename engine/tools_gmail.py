@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from email.utils import parseaddr
 
 import google_auth
+import quality
 
 
 def _gmail(account: str = google_auth.MAIN):
@@ -102,6 +103,9 @@ def _sender(from_account: str, reply_to_email_id: str) -> tuple[str, str]:
 
 def create_email_draft(to: str, subject: str, body: str, from_account: str = "gmail") -> str:
     """יוצר טיוטת מייל (לא שולח). to = כתובת הנמען. from_account: 'gmail' (yossi.kat@gmail.com) או 'anycan' (Yossi@anycan.ai)."""
+    stop = quality.gate(subject, body)
+    if stop:
+        return stop
     acct, _ = _sender(from_account, "")
     d = _gmail(acct).users().drafts().create(userId="me", body={"message": _make_raw(to, subject, body, account=acct)}).execute()
     return f"טיוטה נוצרה ב-{google_auth.ACCOUNTS[acct]['email']} (id {d.get('id')}) אל {to}: {subject}"
@@ -115,6 +119,9 @@ def send_email(to: str, subject: str, body: str, reply_to_email_id: str = "", fr
     if not shula_agent.user_approved():
         return ("עוד לא נשלח. קודם הראי ליוסי את הנוסח המלא (נמען, נושא, תוכן) "
                 "ובקשי שיענה 'כן, שלחי'. רק אחרי התשובה שלו אפשר לשלוח.")
+    stop = quality.gate(subject, body)
+    if stop:
+        return stop
     acct, reply_id = _sender(from_account, reply_to_email_id)
     _gmail(acct).users().messages().send(userId="me", body=_make_raw(to, subject, body, reply_id, acct)).execute()
     shula_agent.consume_approval()
