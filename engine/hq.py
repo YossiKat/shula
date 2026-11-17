@@ -233,6 +233,44 @@ def second_brain() -> dict:
     return _BRAIN["data"]
 
 
+# ---------- פוסטים: צפיות ושיתופים ----------
+# שני הגיליונות שהבדיקה היומית של פייסבוק ממלאת (שיתופים לקבוצות + מדידות של הפוסטים המקוריים). מוצג בדף של ג׳סיקה.
+_POSTS: dict = {"t": 0.0, "data": {}}
+
+
+def posts_stats() -> dict:
+    """{updated, last_share, posts: [{title, link, views, first_views, first_date, pct, likes, comments, groups, pending}]}. 10 דקות בזיכרון."""
+    if time.time() - _POSTS["t"] < 600:
+        return _POSTS["data"]
+    try:
+        import tools_posts
+        shares: dict = {}
+        last_share = ""
+        for r in tools_posts._sheet_rows():
+            d = shares.setdefault(r["post"], {"groups": 0, "pending": 0})
+            d["groups"] += 1
+            d["pending"] += 1 if r["pending"] else 0
+            last_share = max(last_share, r["date"])
+        posts, updated = [], ""
+        for title, st in tools_posts._original_stats().items():
+            first, last = st["first"], st["last"]
+            updated = max(updated, last["date"])
+            v, v0 = last.get("views"), first.get("views")
+            pct = round((v - v0) * 100 / v0) if v is not None and v0 and last["date"] != first["date"] else None
+            best = max((first, last), key=lambda m: m["likes"] + m["comments"])  # חלק מהמדידות בלי לייקים – לוקחים את המלאה
+            sh = shares.get(title, {})
+            posts.append({"title": _clip(title, 80), "link": st.get("link") or "", "views": v, "first_views": v0,
+                          "first_date": first["date"], "date": last["date"], "pct": pct, "likes": best["likes"],
+                          "comments": best["comments"], "groups": sh.get("groups", 0), "pending": sh.get("pending", 0)})
+        posts.sort(key=lambda p: p["views"] or 0, reverse=True)
+        _POSTS["data"], _POSTS["t"] = {"updated": updated, "last_share": last_share, "posts": posts[:30]}, time.time()
+    except Exception:
+        import logging
+        logging.getLogger("shula.hq").exception("posts sheets read failed")
+        _POSTS["t"] = time.time() - 480  # ננסה שוב בעוד 2 דקות
+    return _POSTS["data"]
+
+
 # ---------- כסף לפי חודש ----------
 HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
 
@@ -340,6 +378,7 @@ def snapshot(now: datetime | None = None) -> dict:
             "money": {"spent": round(spent_month), "income": round(income_month), "month": month.strftime("%m.%Y")},
             "learning": learning(),
             "brain": second_brain(),
+            "posts": posts_stats(),
             "today": day_items, "tomorrow": tomorrow, "late": late[-20:], "week": week[:120], "done_week": done_week[-80:]}
 
 
@@ -638,6 +677,9 @@ body.apple input{background:var(--bg2)}body.apple .al.late{animation:none}
 body.apple .chips button[aria-current=page]{color:#fff}
 .arr{font-size:20px;line-height:1;padding:4px 12px}
 .view{display:grid;gap:16px}.sub2{color:var(--mut);margin:-4px 0 12px;font-size:14px}
+.ptw{overflow-x:auto}.pt{width:100%;border-collapse:collapse;font-size:14px}.pt th{font-weight:500;color:var(--mut);font-size:12px;text-align:start;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pt td{padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}.pt tr:last-child td{border-bottom:0}.pt .num{text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pt td:first-child{min-width:105px;line-height:1.4}.pt a{color:inherit;text-decoration:none}.pt a:hover{color:var(--acc)}.pt .up{color:var(--acc)}.pt small{color:var(--mut);display:block;font-size:12px;white-space:normal}
 .grid2{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px}@media (max-width:900px){.grid2{grid-template-columns:1fr}}
 .dhead{display:flex;align-items:center;gap:14px}.dhead .av{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:32px;background:var(--bg2);border:1px solid var(--line)}
 .dhead h2{margin:0;font-size:24px;color:var(--fg);letter-spacing:0}.dhead p{margin:2px 0 0;color:var(--mut)}
@@ -783,7 +825,22 @@ function deptView(k){const v=$('#v-dept');v.replaceChildren();if(!S)return;const
  head.append(dh,st);const g=document.createElement('div');g.className='grid2';
  const left=document.createElement('div');left.style.cssText='display:grid;gap:16px;align-content:start';left.append(card('☀️ היום',by(S.today),'אין משימות היום'),card('⏳ באיחור',by(S.late),'אין משימות באיחור 👏',true));
  const right=document.createElement('div');right.style.cssText='display:grid;gap:16px;align-content:start';right.append(learnCard(k),card('📅 השבוע הקרוב',by(S.week),'אין כלום ב-7 הימים הקרובים',true),card('✅ מה נעשה השבוע',by(S.done_week).slice(-15).reverse(),'עוד לא נרשם שום דבר השבוע',true));
- g.append(left,right);v.append(head,g);}
+ g.append(left,right);v.append(head);if(k==='cmo')v.append(postsCard());v.append(g);}
+function postsCard(){const P=(S&&S.posts)||{};const ps=P.posts||[];const c=document.createElement('section');c.className='card';c.style.minWidth='0';const h=document.createElement('h2');h.textContent='📊 פוסטים: צפיות ושיתופים';c.append(h);
+ const dm=d=>d?d.slice(8)+'.'+d.slice(5,7):'';const sub=document.createElement('p');sub.className='sub2';
+ if(!ps.length){sub.textContent='עוד אין נתונים מפייסבוק.';c.append(sub);return c;}
+ sub.textContent='צפיות נמדדו ב-'+dm(P.updated)+(P.last_share?' · שיתוף אחרון שנרשם: '+dm(P.last_share):'');c.append(sub);
+ const w=document.createElement('div');w.className='ptw';const t=document.createElement('table');t.className='pt';const hr=document.createElement('tr');
+ for(const [x,n] of [['הפוסט',0],['צפיות',1],['שינוי',1],['קבוצות',1]]){const th=document.createElement('th');th.textContent=x;if(n)th.className='num';hr.append(th);}t.append(hr);
+ const nf=n=>n==null?'–':Number(n).toLocaleString('he-IL');
+ for(const p of ps){const tr=document.createElement('tr');const a=document.createElement('td');
+  if(/^https:\/\/www\.facebook\.com\//.test(p.link||'')){const l=document.createElement('a');l.href=p.link;l.target='_blank';l.rel='noopener';l.textContent=p.title;a.append(l);}else a.textContent=p.title;
+  const sm=document.createElement('small');sm.textContent=p.likes+' לייקים · '+p.comments+' תגובות';a.append(sm);
+  const v=document.createElement('td');v.className='num';v.textContent=nf(p.views);
+  const ch=document.createElement('td');ch.className='num';if(p.pct==null){ch.textContent='מדידה ראשונה';}else{ch.textContent='‎'+(p.pct>0?'+':'')+p.pct+'%';if(p.pct>0)ch.classList.add('up');const s2=document.createElement('small');s2.textContent='מאז '+dm(p.first_date);ch.append(s2);}
+  const g=document.createElement('td');g.className='num';g.textContent=p.groups||'–';if(p.pending){const pe=document.createElement('small');pe.textContent=p.pending+' מחכות לאישור';pe.style.color='var(--amb)';g.append(pe);}
+  tr.append(a,v,ch,g);t.append(tr);}
+ w.append(t);c.append(w);return c;}
 function roomView(){if(!S)return;const ns='http://www.w3.org/2000/svg';const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 540 430');svg.setAttribute('role','img');svg.setAttribute('aria-label','שולחן הישיבות');
  const ds=S.depts||[];let h='<ellipse cx="270" cy="200" rx="145" ry="66" fill="var(--bg2)" stroke="var(--line)" stroke-width="2"/><text x="270" y="196" text-anchor="middle" font-size="16" fill="var(--mut)">ישיבת צוות</text><text x="270" y="218" text-anchor="middle" font-size="13" fill="var(--mut)">שולה מנחה</text>';
  ds.forEach((d,i)=>{const a=-Math.PI/2+i*2*Math.PI/ds.length;const x=270+215*Math.cos(a),y=200+145*Math.sin(a);const c=d.late?C.late:d.open?C.open:C.ok;

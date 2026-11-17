@@ -166,3 +166,20 @@ def test_avatars_served_and_listed(monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
     assert c.get("/hq/img/..%2Fhq.jpg").status_code == 404
     assert c.get("/hq/img/nope.jpg").status_code == 404
+
+
+def test_posts_views_and_shares_for_jessica(monkeypatch):
+    import tools_posts
+    shares = [["2026-11-12", "12:33", "פוסט א", "קבוצה 1", "https://www.facebook.com/groups/1/permalink/2/", "לא"],
+              ["2026-11-12", "12:34", "פוסט א", "קבוצה 2", "https://www.facebook.com/groups/3/pending_posts/4/", "כן"]]
+    originals = [["2026-11-12", "פוסט א", "https://www.facebook.com/reel/1/", "100", "3", "1", "36"],
+                 ["2026-11-16", "פוסט א", "https://www.facebook.com/reel/1/", "250"],
+                 ["2026-11-16", "פוסט ב", "https://www.facebook.com/reel/2/", "900"]]
+    monkeypatch.setattr(tools_posts, "_csv", lambda sid: shares if sid == tools_posts.SHARES_SHEET_ID else originals)
+    monkeypatch.setattr(hq, "_POSTS", {"t": 0.0, "data": {}})
+    p = hq.posts_stats()
+    assert p["updated"] == "2026-11-16" and p["last_share"] == "2026-11-12"
+    assert [x["title"] for x in p["posts"]] == ["פוסט ב", "פוסט א"]
+    a = p["posts"][1]
+    assert a["views"] == 250 and a["pct"] == 150 and a["groups"] == 2 and a["pending"] == 1 and a["likes"] == 3
+    assert p["posts"][0]["pct"] is None and p["posts"][0]["groups"] == 0
