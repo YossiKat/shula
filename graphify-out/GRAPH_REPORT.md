@@ -1,17 +1,17 @@
 # Graph Report - shula  (2026-11-17)
 
 ## Corpus Check
-- 51 files · ~37,071 words
+- 51 files · ~37,116 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 1 file(s) not represented in the graph (top: (none) 1)
 
 ## Summary
-- 869 nodes · 1752 edges · 43 communities (34 shown, 9 thin omitted)
+- 869 nodes · 1752 edges · 44 communities (35 shown, 9 thin omitted)
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 84 edges (avg confidence: 0.85)
 - Token cost: 102,233 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5eebea85`
+- Built from commit: `e1039ffb`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -48,6 +48,7 @@
 - whatsapp_webhook
 - hq_auth.py
 - test_voice.py
+- _board
 - staff.py
 - _push_when_ready
 - reply
@@ -88,7 +89,7 @@
 - **Prompt-file bot plugin mechanism** — readme_add_new_bot, readme_bots_folder, readme_github, readme_dashboard, engine_bots_core_shula_core_prompt [INFERRED 0.75]
 - **Google Workspace integration stack** — engine_bots_core_shula_calendar, engine_bots_core_shula_gmail, engine_bots_core_shula_drive, engine_requirements_google_api_python_client, engine_requirements_google_auth, engine_requirements_google_auth_oauthlib [INFERRED 0.85]
 
-## Communities (43 total, 9 thin omitted)
+## Communities (44 total, 9 thin omitted)
 
 ### Community 0 - "Python requirements"
 Cohesion: 0.07
@@ -179,8 +180,8 @@ Cohesion: 0.06
 Nodes (51): add_expense(), add_task(), _amount(), api_action(), api_money(), api_today(), _authed(), avatars() (+43 more)
 
 ### Community 25 - "_query"
-Cohesion: 0.12
-Nodes (21): _ao_by_ids(), _ao_items(), _copy_updates(), _create(), _ensure(), _fields(), import_content_hub(), _imported() (+13 more)
+Cohesion: 0.15
+Nodes (18): _ao_by_ids(), _ao_items(), _copy_updates(), _create(), _ensure(), _fields(), import_content_hub(), _imported() (+10 more)
 
 ### Community 26 - "_system_prompt"
 Cohesion: 0.29
@@ -191,8 +192,8 @@ Cohesion: 0.25
 Nodes (4): _keep_awake_loop(), _start_keep_awake(), test_keep_awake_does_not_start_outside_render(), test_keep_awake_starts_on_render()
 
 ### Community 28 - "tools_monday.py"
-Cohesion: 0.23
-Nodes (6): _board(), _anycan_boards(), _format_board(), get_anycan_monday_items(), get_monday_items(), _board_items()
+Cohesion: 0.25
+Nodes (5): _anycan_boards(), _format_board(), get_anycan_monday_items(), get_monday_items(), _board_items()
 
 ### Community 29 - "whatsapp_webhook"
 Cohesion: 0.11
@@ -206,9 +207,13 @@ Nodes (29): auth_action(), _b64(), check_backup_code(), _drive(), _find_file(), 
 Cohesion: 0.19
 Nodes (6): client(), test_long_answer_is_not_spoken(), test_voice_failure_still_sends_text(), test_voice_note_gets_text_and_playable_clip(), test_without_key_answer_stays_text_only(), _voice_note()
 
+### Community 33 - "_board"
+Cohesion: 0.50
+Nodes (3): _board(), move_posts_tracking(), setup_posts_tracking()
+
 ### Community 36 - "staff.py"
-Cohesion: 0.15
-Nodes (14): claude_action_name(), _cols(), _group_id(), import_claude_actions(), import_intel_actions(), log_to_department(), _names_in_group(), _old_title() (+6 more)
+Cohesion: 0.16
+Nodes (15): _board(), claude_action_name(), _cols(), _group_id(), import_claude_actions(), import_intel_actions(), log_to_department(), _names_in_group() (+7 more)
 
 ### Community 37 - "_push_when_ready"
 Cohesion: 0.33
