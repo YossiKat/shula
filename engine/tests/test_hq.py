@@ -37,7 +37,8 @@ def _client(monkeypatch, events=()):
 
 
 def _ev(id, title, color, hours=0, days=0):
-    t = datetime.now(tools_calendar.TZ).replace(hour=12, minute=0, second=0, microsecond=0) + timedelta(days=days, hours=hours)
+    # תחילת היום ולא 12:00 — הוצאה נספרת רק אם כבר קרתה, והבדיקה רצה גם בבוקר
+    t = datetime.now(tools_calendar.TZ).replace(hour=0, minute=0, second=1, microsecond=0) + timedelta(days=days, hours=hours)
     return {"id": id, "summary": title, "colorId": color, "start": {"dateTime": t.isoformat()}}
 
 
