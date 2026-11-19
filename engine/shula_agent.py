@@ -23,6 +23,7 @@ from tools_claude_log import CLAUDE_LOG_TOOLS
 from tools_drive import DRIVE_TOOLS
 from tools_gmail import GMAIL_TOOLS
 from tools_monday import MONDAY_TOOLS
+from tools_mailcols import MAILCOLS_TOOLS
 from tools_posts import POSTS_TOOLS
 from tools_hub import HUB_TOOLS
 from tools_social import SOCIAL_TOOLS
@@ -98,7 +99,7 @@ def _facts_text() -> str:
 
 
 MEMORY_TOOLS = [remember_fact, forget_fact]
-TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + POSTS_TOOLS + HUB_TOOLS + SYNC_TOOLS + CLAUDE_LOG_TOOLS + MEMORY_TOOLS + WEATHER_TOOLS + STAFF_TOOLS + SNAPSHOT_TOOLS + OUTREACH_TOOLS + HQ_TOOLS]
+TOOLS = [_safe(t) for t in CALENDAR_TOOLS + GMAIL_TOOLS + DRIVE_TOOLS + SOCIAL_TOOLS + MONDAY_TOOLS + MAILCOLS_TOOLS + POSTS_TOOLS + HUB_TOOLS + SYNC_TOOLS + CLAUDE_LOG_TOOLS + MEMORY_TOOLS + WEATHER_TOOLS + STAFF_TOOLS + SNAPSHOT_TOOLS + OUTREACH_TOOLS + HQ_TOOLS]
 
 # זיכרון: {sender: [{"role": "user"|"model", "text": "..."}]}
 _histories: dict[str, list] = defaultdict(list)
