@@ -377,6 +377,13 @@ def daily_loop(check_every: int = 600) -> None:
             except Exception:
                 log.exception("mail → monday columns failed")
             try:
+                import tools_aotasks
+                out = tools_aotasks.import_ao_tasks()
+                if not out.startswith(("אין", "כל המשימות")):
+                    log.info("alpha omega tasks → departments: %s", out.replace("\n", " | "))
+            except Exception:
+                log.exception("alpha omega tasks import failed")
+            try:
                 import tools_hub
                 log.info("alpha omega two-way sync: %s", tools_hub.sync_content_hub())
             except Exception:
