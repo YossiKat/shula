@@ -109,3 +109,8 @@ def test_import_claude_actions_writes_new_rows_once_to_anycan(monkeypatch):
     out = staff.import_claude_actions()
     assert made == [(staff.DEPARTMENTS["home"]["group"], staff.claude_action_name(rows[1]), "anycan")]
     assert "יוני הספר" in updates[0] and "ננסי: 1" in out
+
+
+def test_claude_action_name_keeps_dots_when_sheet_shows_slashes():
+    assert staff.claude_action_name(["20/11/2026", "9:35", "יומן", "עדכון ארוחת ערב", ""]) == "🤖 20.11.2026 9:35 · עדכון ארוחת ערב"
+    assert staff.claude_action_name(["20.11.2026", "9:35", "יומן", "עדכון ארוחת ערב", ""]) == "🤖 20.11.2026 9:35 · עדכון ארוחת ערב"

@@ -333,7 +333,9 @@ def dept_of_action(where: str, what: str, details: str = "") -> str:
 
 def claude_action_name(row: list) -> str:
     r = (list(row) + [""] * 5)[:5]
-    return f"{CLAUDE_MARK}{r[0].strip()} {r[1].strip()} · {r[3].strip() or r[2].strip() or 'פעולה'}"[:250]
+    d = _row_date(r[0])  # תמיד D.M.YYYY — גם כשהגיליון מציג 20/11/2026 — כדי שלא ייווצרו כפולים ב-monday
+    day = f"{d.day}.{d.month}.{d.year}" if d else r[0].strip()
+    return f"{CLAUDE_MARK}{day} {r[1].strip()} · {r[3].strip() or r[2].strip() or 'פעולה'}"[:250]
 
 
 def import_claude_actions(days: int = 2) -> str:
@@ -359,7 +361,8 @@ def import_claude_actions(days: int = 2) -> str:
         if gid not in have:
             have[gid] = _names_in_group(board["id"], gid)
         name = claude_action_name(r)
-        if name in have[gid]:
+        raw = f"{CLAUDE_MARK}{r[0].strip()} {r[1].strip()} · {r[3].strip() or r[2].strip() or 'פעולה'}"[:250]
+        if name in have[gid] or raw in have[gid]:  # גם שורות שנכנסו עם תאריך 20/11/2026
             continue
         item = tools_hub._create(board["id"], gid, name, {}, "anycan")
         have[gid].add(name)
