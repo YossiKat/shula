@@ -153,7 +153,8 @@ def test_only_shula_made_mirrors_are_cleaned_from_the_calendar(monkeypatch):
     soon = f"{SOON}T08:30:00+02:00"
     evs = [{"id": "a", "summary": "Medtronic · 🩺 רופאים ומטפלים", "start": {"dateTime": soon}},
            {"id": "b", "summary": "🤖 15.11.2026 21:10 · הכנסה 400₪", "start": {"dateTime": soon}},
+           {"id": "e", "summary": "🤖 20/11/2026 9:35 · עדכון ארוחת ערב", "start": {"dateTime": soon}},
            {"id": "c", "summary": "📞 לבדוק עם דנה", "start": {"dateTime": soon}},
            {"id": "d", "summary": "Medtronic · 🩺 רופאים ומטפלים", "colorId": "11", "start": {"dateTime": soon}}]
     cal, _ = _setup(monkeypatch, [], evs)
-    assert "2 העתקות" in tools_sync.clean_monday_mirror() and set(cal.store) == {"c", "d"}
+    assert "3 העתקות" in tools_sync.clean_monday_mirror() and set(cal.store) == {"c", "d"}

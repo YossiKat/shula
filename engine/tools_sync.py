@@ -277,7 +277,7 @@ def sync_monday_and_calendar(preview: bool = False) -> str:
         _lock.release()
 
 
-MIRROR_LOG = re.compile(r"^🤖 \d{1,2}\.\d{1,2}\.\d{4}")
+MIRROR_LOG = re.compile(r"^🤖 \d{1,2}[./]\d{1,2}[./]\d{4}")  # 21.11: הגיליון התחיל להציג תאריכים עם / (20/11/2026)
 MIRROR_SEGMENTS = ("🩺 רופאים ומטפלים", "🤝 עמותות, מועדונים וקבוצות", "🏢 שותפים וחברות",
                    "❤️ אנשים עם פרקינסון ומשפחות", "📇 אנשי קשר נוספים")
 
