@@ -19,6 +19,7 @@ COLOR_IDS = {
     "meeting": "11",  # אדום  — פגישות ושיחות זום
     "mentors": "5",   # צהוב  — מפגשי תוכנית המנטורים (קבוצת פיברו)
     "monday": "2",    # ירוק בהיר — כל מה שמגיע מה-monday
+    "personal_meal": "8",  # אפור — ארוחות (אחרים)
 }
 COLOR_NAMES = {"6": "🟠 הוצאה", "7": "🔵 בוצע", "10": "🟢 שיעור אופניים", "11": "🔴 פגישה", "5": "🟡 מנטורים", "2": "🟢 הכנסה או monday"}
 
@@ -161,4 +162,81 @@ def delete_calendar_event(title_query: str, date_iso: str) -> str:
     return f"נמחק: {_fmt(items[0])}"
 
 
-CALENDAR_TOOLS = [get_events_for_date, get_calendar_events, search_calendar_events, create_calendar_event, delete_calendar_event]
+DONE_WORDS = ("בוצע", "בוצעה", "סיימתי", "עשיתי", "גמרתי", "done", "✅")
+_CLOSED_MARKS = ("✅", "בוצע", "❌", "בוטל")
+
+
+def mark_event_done(title_query: str, result: str = "", days_back: int = 14) -> str:
+    """מסמנת משימה/שיחה/פגישה ביומן כ'בוצע' (כשיוסי כותב 'בוצע <שם המשימה>').
+    title_query = מילה או שתיים מהכותרת. result = תוצאה קצרה אם יוסי אמר (למשל 'נקבע ביקור 25.1').
+    מחפשת אירועים פתוחים מ-days_back ימים אחורה ועד סוף היום. אם יש כמה התאמות — מסמנת את האחרונה שזמנה עבר,
+    ואם אין כזו — מחזירה רשימה כדי לשאול את יוסי איזו."""
+    import shula_agent
+    msg = (getattr(shula_agent._turn, "message", "") or "").lower()
+    if not any(w in msg for w in DONE_WORDS):
+        return "לא סומן. מסמנים 'בוצע' רק כשיוסי עצמו כותב 'בוצע' בהודעה שלו."
+    now = datetime.now(TZ)
+    t_min = (now - timedelta(days=days_back)).replace(hour=0, minute=0, second=0)
+    t_max = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+    items = _svc().events().list(calendarId=CALENDAR_ID, q=title_query, timeMin=t_min.isoformat(),
+                                 timeMax=t_max.isoformat(), singleEvents=True, orderBy="startTime",
+                                 maxResults=30).execute().get("items", [])
+    open_items = [e for e in items if not any(m in e.get("summary", "") for m in _CLOSED_MARKS)]
+    if not open_items:
+        return f"לא מצאתי משימה פתוחה עם '{title_query}' ב-{days_back} הימים האחרונים."
+
+    def _start(e):
+        s = e.get("start", {})
+        v = s.get("dateTime") or (s.get("date", "") + "T00:00:00+02:00")
+        return datetime.fromisoformat(v)
+
+    past = [e for e in open_items if _start(e) <= now]
+    if past:
+        ev = past[-1]
+    elif len(open_items) == 1:
+        ev = open_items[0]
+    else:
+        return "יש כמה משימות מתאימות — שאלי את יוסי איזו:\n" + "\n".join(_fmt(e) for e in open_items)
+    title = "✅ בוצע: " + ev.get("summary", "")
+    if result:
+        title += f" ({result})"
+    _svc().events().patch(calendarId=CALENDAR_ID, eventId=ev["id"], sendUpdates="none",
+                          body={"summary": title, "colorId": COLOR_IDS["done"]}).execute()
+    left = len(open_items) - 1
+    more = f" עוד {left} פתוחות עם אותה מילה." if left else ""
+    return f"סומן: {title} ({_fmt(ev).split(' — ')[0]}).{more}"
+
+
+RATINGS = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
+
+
+def log_meal(description: str, calories_estimate: int, rating: str = "yellow",
+             price_ils: float = 0, place: str = "", when_iso: str = "",
+             protein_g: int = 0, carbs_g: int = 0, fat_g: int = 0) -> str:
+    """רושמת ארוחה ביומן (מתמונה של אוכל, קבלה של וולט או 'אכלתי ...').
+    description = מה נאכל (קצר). calories_estimate = הערכת קלוריות שלך (מספר שלם, הערכה בלבד).
+    rating = 'green' (טוב ליעד), 'yellow' (בסדר), 'red' (כבד/לא מתאים ליעד ~1,800 קק״ל ביום).
+    price_ils = מחיר בשקלים אם יש קבלה (וולט וכו') — אז נרשמת גם הוצאה בכתום. place = מסעדה/מקום.
+    when_iso = YYYY-MM-DDTHH:MM, ריק = עכשיו (מעוגל לרבע שעה).
+    protein_g / carbs_g / fat_g = הערכת חלבון, פחמימות ושומן בגרמים (אם אפשר להעריך) — מוצגים בלוח התזונה במטה."""
+    if when_iso:
+        start = datetime.fromisoformat(when_iso).replace(tzinfo=TZ)
+    else:
+        n = datetime.now(TZ)
+        start = n.replace(minute=n.minute - n.minute % 15, second=0, microsecond=0)
+    mark = RATINGS.get(rating, "🟡")
+    where = f", {place}" if place else ""
+    meal_title = f"🍽️ ארוחה: {description}{where} – ~{int(calories_estimate)} קק״ל {mark}"
+    if protein_g or carbs_g or fat_g:
+        meal_title += f" · ח׳ {int(protein_g)} פ׳ {int(carbs_g)} ש׳ {int(fat_g)}"
+    note = "הערכת קלוריות בלבד (לא מדידה). יעד זמני: ~1,800 קק״ל ביום."
+    out = [create_calendar_event(meal_title, start.strftime("%Y-%m-%dT%H:%M"), 15, "personal_meal", notes=note)]
+    if price_ils:
+        exp_title = f"💸 הוצאה {price_ils:g}₪ – {description}{where}"
+        out.append(create_calendar_event(exp_title, start.strftime("%Y-%m-%dT%H:%M"), 15, "expense",
+                                         notes=f"ארוחה. {meal_title}"))
+    return "\n".join(out)
+
+
+CALENDAR_TOOLS = [get_events_for_date, get_calendar_events, search_calendar_events, create_calendar_event,
+                  delete_calendar_event, mark_event_done, log_meal]

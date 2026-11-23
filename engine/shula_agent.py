@@ -295,7 +295,7 @@ def reply(sender: str, user_message: str, bot_name: str = "core_shula", attachme
             result = _reply_gemini(sender, msg, bot_name)
         text, tools_used = result
         seconds = time.monotonic() - started
-        if any(t in ("create_calendar_event", "delete_calendar_event") for t in tools_used):
+        if any(t in ("create_calendar_event", "delete_calendar_event", "mark_event_done", "log_meal") for t in tools_used):
             _invalidate_agenda()
     threading.Thread(target=memory_store.save, args=(dict(_histories),), daemon=True).start()
     final = text or "לא הצלחתי לנסח תשובה, נסה שוב."
