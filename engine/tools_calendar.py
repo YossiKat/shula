@@ -211,12 +211,14 @@ RATINGS = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
 
 
 def log_meal(description: str, calories_estimate: int, rating: str = "yellow",
-             price_ils: float = 0, place: str = "", when_iso: str = "") -> str:
+             price_ils: float = 0, place: str = "", when_iso: str = "",
+             protein_g: int = 0, carbs_g: int = 0, fat_g: int = 0) -> str:
     """רושמת ארוחה ביומן (מתמונה של אוכל, קבלה של וולט או 'אכלתי ...').
     description = מה נאכל (קצר). calories_estimate = הערכת קלוריות שלך (מספר שלם, הערכה בלבד).
     rating = 'green' (טוב ליעד), 'yellow' (בסדר), 'red' (כבד/לא מתאים ליעד ~1,800 קק״ל ביום).
     price_ils = מחיר בשקלים אם יש קבלה (וולט וכו') — אז נרשמת גם הוצאה בכתום. place = מסעדה/מקום.
-    when_iso = YYYY-MM-DDTHH:MM, ריק = עכשיו (מעוגל לרבע שעה)."""
+    when_iso = YYYY-MM-DDTHH:MM, ריק = עכשיו (מעוגל לרבע שעה).
+    protein_g / carbs_g / fat_g = הערכת חלבון, פחמימות ושומן בגרמים (אם אפשר להעריך) — מוצגים בלוח התזונה במטה."""
     if when_iso:
         start = datetime.fromisoformat(when_iso).replace(tzinfo=TZ)
     else:
@@ -225,6 +227,8 @@ def log_meal(description: str, calories_estimate: int, rating: str = "yellow",
     mark = RATINGS.get(rating, "🟡")
     where = f", {place}" if place else ""
     meal_title = f"🍽️ ארוחה: {description}{where} – ~{int(calories_estimate)} קק״ל {mark}"
+    if protein_g or carbs_g or fat_g:
+        meal_title += f" · ח׳ {int(protein_g)} פ׳ {int(carbs_g)} ש׳ {int(fat_g)}"
     note = "הערכת קלוריות בלבד (לא מדידה). יעד זמני: ~1,800 קק״ל ביום."
     out = [create_calendar_event(meal_title, start.strftime("%Y-%m-%dT%H:%M"), 15, "personal_meal", notes=note)]
     if price_ils:

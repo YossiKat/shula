@@ -98,3 +98,10 @@ def test_log_meal_without_price_only_meal(monkeypatch):
     monkeypatch.setattr(tools_calendar, "_svc", lambda: svc)
     tools_calendar.log_meal("פיצה", 900, "red", when_iso="2026-11-23T20:00")
     assert len(svc.inserted) == 1 and svc.inserted[0]["summary"].endswith("🔴")
+
+
+def test_log_meal_adds_macros_to_title(monkeypatch):
+    svc = _FakeInsertService()
+    monkeypatch.setattr(tools_calendar, "_svc", lambda: svc)
+    tools_calendar.log_meal("שקשוקה", 520, "green", when_iso="2026-11-23T08:30", protein_g=28, carbs_g=40, fat_g=22)
+    assert svc.inserted[0]["summary"].endswith("🟢 · ח׳ 28 פ׳ 40 ש׳ 22")
